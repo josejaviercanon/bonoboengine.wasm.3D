@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">true</RunAOTCompilation>
+    <WasmStripILAfterAOT Condition="'$(Configuration)' == 'Release'">true</WasmStripILAfterAOT>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <InvariantTimezone>true</InvariantTimezone>
+    <TrimMode>full</TrimMode>
+    <WasmGenerateAppBundle>true</WasmGenerateAppBundle>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Engine\Game.Engine.csproj" />
+    <ProjectReference Include="..\Game.UI\Game.UI.csproj" />
+    <ProjectReference Include="..\Game.Examples\Game.Examples.csproj" />
+  </ItemGroup>
+
+  <!-- Copy Vite + assets from Game.UI before build so wwwroot is populated -->
+  <Target Name="CopyGameUIAssets" BeforeTargets="Build">
+    <ItemGroup>
+      <_GameUIDist Include="..\Game.UI\wwwroot\dist\**\*" />
+      <_GameUIAudio Include="..\Game.UI\wwwroot\audio\**\*" />
+      <_GameUIGames Include="..\Game.UI\wwwroot\games\**\*" />
+      <_GameUIRootFile Include="..\Game.UI\wwwroot\background.png" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_GameUIDist)" DestinationFiles="@(_GameUIDist->'$(MSBuildProjectDirectory)\wwwroot\dist\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_GameUIAudio)" DestinationFiles="@(_GameUIAudio->'$(MSBuildProjectDirectory)\wwwroot\audio\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_GameUIGames)" DestinationFiles="@(_GameUIGames->'$(MSBuildProjectDirectory)\wwwroot\games\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_GameUIRootFile)" DestinationFolder="$(MSBuildProjectDirectory)\wwwroot" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

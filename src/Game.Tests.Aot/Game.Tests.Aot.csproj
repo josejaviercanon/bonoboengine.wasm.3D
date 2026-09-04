@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <!-- .NET 10: opt into the new MTP-based `dotnet test` experience. -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+    <!-- Intentional: these tests pin engine constants (e.g. AsteroidsConfig.CourtWidth)
+         against the reference-game values as regression checks. TUnit flags constant
+         assertions because of cross-assembly const inlining; the full-solution build
+         recompiles tests together with the engine, so the pins stay meaningful. -->
+    <NoWarn>$(NoWarn);TUnitAssertions0005</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Engine\Game.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="TUnit" Version="1.65.0" />
+  </ItemGroup>
+
+</Project>

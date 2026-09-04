@@ -315,6 +315,13 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 
+# Generated frontend build output (Vite + Tailwind CLI) — rebuilt via `npm run build` in src/Game.UI
+src/Game.UI/wwwroot/dist/
+
+# Playwright (Game.Tests.UI) output
+src/Game.Tests.UI/playwright-report/
+src/Game.Tests.UI/test-results/
+
 # Visual Studio 6 build log
 *.plg
 
@@ -427,3 +434,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Temp files
+src/Temp/*
+Temp/*
+nul* 
+.playwright-cli/

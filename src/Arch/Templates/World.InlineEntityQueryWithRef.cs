@@ -1,0 +1,518 @@
+﻿
+
+// TODO: Move query with T0 into world.cs?
+
+namespace Arch.Core;
+public partial class World
+{
+    public void InlineEntityQuery<T, T0>(in QueryDescription description) where T : struct, IForEachWithEntity<T0>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6, T7>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            ref var t7FirstElement = ref chunk.GetFirst<T7>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                ref var t7Component = ref Unsafe.Add(ref t7FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component,ref t7Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6, T7, T8>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            ref var t7FirstElement = ref chunk.GetFirst<T7>();
+            ref var t8FirstElement = ref chunk.GetFirst<T8>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                ref var t7Component = ref Unsafe.Add(ref t7FirstElement, entityIndex);
+                ref var t8Component = ref Unsafe.Add(ref t8FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component,ref t7Component,ref t8Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            ref var t7FirstElement = ref chunk.GetFirst<T7>();
+            ref var t8FirstElement = ref chunk.GetFirst<T8>();
+            ref var t9FirstElement = ref chunk.GetFirst<T9>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                ref var t7Component = ref Unsafe.Add(ref t7FirstElement, entityIndex);
+                ref var t8Component = ref Unsafe.Add(ref t8FirstElement, entityIndex);
+                ref var t9Component = ref Unsafe.Add(ref t9FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component,ref t7Component,ref t8Component,ref t9Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            ref var t7FirstElement = ref chunk.GetFirst<T7>();
+            ref var t8FirstElement = ref chunk.GetFirst<T8>();
+            ref var t9FirstElement = ref chunk.GetFirst<T9>();
+            ref var t10FirstElement = ref chunk.GetFirst<T10>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                ref var t7Component = ref Unsafe.Add(ref t7FirstElement, entityIndex);
+                ref var t8Component = ref Unsafe.Add(ref t8FirstElement, entityIndex);
+                ref var t9Component = ref Unsafe.Add(ref t9FirstElement, entityIndex);
+                ref var t10Component = ref Unsafe.Add(ref t10FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component,ref t7Component,ref t8Component,ref t9Component,ref t10Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            ref var t7FirstElement = ref chunk.GetFirst<T7>();
+            ref var t8FirstElement = ref chunk.GetFirst<T8>();
+            ref var t9FirstElement = ref chunk.GetFirst<T9>();
+            ref var t10FirstElement = ref chunk.GetFirst<T10>();
+            ref var t11FirstElement = ref chunk.GetFirst<T11>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                ref var t7Component = ref Unsafe.Add(ref t7FirstElement, entityIndex);
+                ref var t8Component = ref Unsafe.Add(ref t8FirstElement, entityIndex);
+                ref var t9Component = ref Unsafe.Add(ref t9FirstElement, entityIndex);
+                ref var t10Component = ref Unsafe.Add(ref t10FirstElement, entityIndex);
+                ref var t11Component = ref Unsafe.Add(ref t11FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component,ref t7Component,ref t8Component,ref t9Component,ref t10Component,ref t11Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            ref var t7FirstElement = ref chunk.GetFirst<T7>();
+            ref var t8FirstElement = ref chunk.GetFirst<T8>();
+            ref var t9FirstElement = ref chunk.GetFirst<T9>();
+            ref var t10FirstElement = ref chunk.GetFirst<T10>();
+            ref var t11FirstElement = ref chunk.GetFirst<T11>();
+            ref var t12FirstElement = ref chunk.GetFirst<T12>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                ref var t7Component = ref Unsafe.Add(ref t7FirstElement, entityIndex);
+                ref var t8Component = ref Unsafe.Add(ref t8FirstElement, entityIndex);
+                ref var t9Component = ref Unsafe.Add(ref t9FirstElement, entityIndex);
+                ref var t10Component = ref Unsafe.Add(ref t10FirstElement, entityIndex);
+                ref var t11Component = ref Unsafe.Add(ref t11FirstElement, entityIndex);
+                ref var t12Component = ref Unsafe.Add(ref t12FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component,ref t7Component,ref t8Component,ref t9Component,ref t10Component,ref t11Component,ref t12Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            ref var t7FirstElement = ref chunk.GetFirst<T7>();
+            ref var t8FirstElement = ref chunk.GetFirst<T8>();
+            ref var t9FirstElement = ref chunk.GetFirst<T9>();
+            ref var t10FirstElement = ref chunk.GetFirst<T10>();
+            ref var t11FirstElement = ref chunk.GetFirst<T11>();
+            ref var t12FirstElement = ref chunk.GetFirst<T12>();
+            ref var t13FirstElement = ref chunk.GetFirst<T13>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                ref var t7Component = ref Unsafe.Add(ref t7FirstElement, entityIndex);
+                ref var t8Component = ref Unsafe.Add(ref t8FirstElement, entityIndex);
+                ref var t9Component = ref Unsafe.Add(ref t9FirstElement, entityIndex);
+                ref var t10Component = ref Unsafe.Add(ref t10FirstElement, entityIndex);
+                ref var t11Component = ref Unsafe.Add(ref t11FirstElement, entityIndex);
+                ref var t12Component = ref Unsafe.Add(ref t12FirstElement, entityIndex);
+                ref var t13Component = ref Unsafe.Add(ref t13FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component,ref t7Component,ref t8Component,ref t9Component,ref t10Component,ref t11Component,ref t12Component,ref t13Component);
+            }
+        }
+    }
+
+    public void InlineEntityQuery<T, T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(in QueryDescription description) where T : struct, IForEachWithEntity<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>
+    {
+        var t = new T();
+
+        var query = Query(in description);
+        foreach (ref var chunk in query)
+        {
+            ref var entityFirstElement = ref chunk.Entity(0);
+            ref var t0FirstElement = ref chunk.GetFirst<T0>();
+            ref var t1FirstElement = ref chunk.GetFirst<T1>();
+            ref var t2FirstElement = ref chunk.GetFirst<T2>();
+            ref var t3FirstElement = ref chunk.GetFirst<T3>();
+            ref var t4FirstElement = ref chunk.GetFirst<T4>();
+            ref var t5FirstElement = ref chunk.GetFirst<T5>();
+            ref var t6FirstElement = ref chunk.GetFirst<T6>();
+            ref var t7FirstElement = ref chunk.GetFirst<T7>();
+            ref var t8FirstElement = ref chunk.GetFirst<T8>();
+            ref var t9FirstElement = ref chunk.GetFirst<T9>();
+            ref var t10FirstElement = ref chunk.GetFirst<T10>();
+            ref var t11FirstElement = ref chunk.GetFirst<T11>();
+            ref var t12FirstElement = ref chunk.GetFirst<T12>();
+            ref var t13FirstElement = ref chunk.GetFirst<T13>();
+            ref var t14FirstElement = ref chunk.GetFirst<T14>();
+            
+            foreach (var entityIndex in chunk)
+            {
+                var entity = Unsafe.Add(ref entityFirstElement, entityIndex);
+                ref var t0Component = ref Unsafe.Add(ref t0FirstElement, entityIndex);
+                ref var t1Component = ref Unsafe.Add(ref t1FirstElement, entityIndex);
+                ref var t2Component = ref Unsafe.Add(ref t2FirstElement, entityIndex);
+                ref var t3Component = ref Unsafe.Add(ref t3FirstElement, entityIndex);
+                ref var t4Component = ref Unsafe.Add(ref t4FirstElement, entityIndex);
+                ref var t5Component = ref Unsafe.Add(ref t5FirstElement, entityIndex);
+                ref var t6Component = ref Unsafe.Add(ref t6FirstElement, entityIndex);
+                ref var t7Component = ref Unsafe.Add(ref t7FirstElement, entityIndex);
+                ref var t8Component = ref Unsafe.Add(ref t8FirstElement, entityIndex);
+                ref var t9Component = ref Unsafe.Add(ref t9FirstElement, entityIndex);
+                ref var t10Component = ref Unsafe.Add(ref t10FirstElement, entityIndex);
+                ref var t11Component = ref Unsafe.Add(ref t11FirstElement, entityIndex);
+                ref var t12Component = ref Unsafe.Add(ref t12FirstElement, entityIndex);
+                ref var t13Component = ref Unsafe.Add(ref t13FirstElement, entityIndex);
+                ref var t14Component = ref Unsafe.Add(ref t14FirstElement, entityIndex);
+                
+                t.Update(entity, ref t0Component,ref t1Component,ref t2Component,ref t3Component,ref t4Component,ref t5Component,ref t6Component,ref t7Component,ref t8Component,ref t9Component,ref t10Component,ref t11Component,ref t12Component,ref t13Component,ref t14Component);
+            }
+        }
+    }
+
+}
