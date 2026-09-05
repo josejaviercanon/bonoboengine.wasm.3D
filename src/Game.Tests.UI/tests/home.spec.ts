@@ -6,7 +6,7 @@ test.describe('Game.Wasm browser-wasm host', () => {
 
     const modal = page.locator('#welcome-modal');
     await expect(modal).toBeVisible({ timeout: 60_000 });
-    await expect(modal.locator('h1')).toContainText('Bonobo Examples');
+    await expect(modal.locator('h1')).toContainText('Bonobo Engine');
 
     const continueBtn = page.locator('#welcome-continue');
     await continueBtn.click();
@@ -22,21 +22,29 @@ test.describe('Game.Wasm browser-wasm host', () => {
     await continueBtn.click();
 
     // Wait for the toolbar selects to be populated by main.mjs after WASM boot
-    const exampleSelect = page.locator('#example-select');
-    await expect(exampleSelect).toBeVisible({ timeout: 60_000 });
-    await expect(exampleSelect.locator('option')).toHaveCount(19, { timeout: 60_000 });
-
     const gameSelect = page.locator('#game-select');
     await expect(gameSelect).toBeVisible({ timeout: 60_000 });
     // 6 games + 1 placeholder option
     await expect(gameSelect.locator('option')).toHaveCount(7, { timeout: 60_000 });
   });
 
-  test('PixiJS bootstraps and mounts a canvas', async ({ page }) => {
+  test('Babylon.js bootstraps and mounts a canvas', async ({ page }) => {
     await page.goto('/');
 
-    // WASM boot + pixi init produces the canvas
-    await expect(page.locator('#pixi-viewport canvas').first()).toBeVisible({ timeout: 60_000 });
+    // WASM boot + Babylon init produces the render canvas
+    const canvas = page.locator('#render-viewport #render-canvas');
+    await expect(canvas).toBeVisible({ timeout: 60_000 });
+
+    // A WebGL2 context must be live on the Babylon canvas.
+    const contextType = await canvas.evaluate((el) => {
+      const c = el as HTMLCanvasElement;
+      const gl = c.getContext('webgl2');
+      if (gl) return 'webgl2';
+      const gl1 = c.getContext('webgl');
+      if (gl1) return 'webgl';
+      return 'none';
+    });
+    expect(['webgl2', 'webgl']).toContain(contextType);
   });
 
   test('no console errors during bootstrap', async ({ page }) => {
@@ -47,7 +55,7 @@ test.describe('Game.Wasm browser-wasm host', () => {
     page.on('pageerror', err => errors.push(String(err)));
 
     await page.goto('/');
-    await expect(page.locator('#pixi-viewport')).toBeAttached({ timeout: 60_000 });
+    await expect(page.locator('#render-viewport')).toBeAttached({ timeout: 60_000 });
 
     expect(errors, errors.join('\n')).toEqual([]);
   });

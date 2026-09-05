@@ -1,7 +1,7 @@
 {
-  "name": "bonoboengine.blazorwasm",
+  "name": "bonoboengine.wasm.3d",
   "version": "1.0.0",
-  "description": ".NET MAUI Blazor Hybrid. This template configures a monorepo workspace containing your pure C# Engine, the shared Razor Class Library (RCL), the .NET MAUI Hybrid client, the Blazor Web App, and a TypeScript-driven PixiJS build managed by Vite and Tailwind CLI.",
+  "description": "Bonobo Engine browser-wasm host frontend: Babylon.js 3D rendering over the zero-copy C# shared-memory bridge, built with Vite and Tailwind CLI.",
   "type": "module",
   "scripts": {
     "build:js": "vite build",
@@ -16,22 +16,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/josejaviercanon/bonoboengine.blazorwasm.git"
+    "url": "git+https://github.com/josejaviercanon/bonoboengine.wasm.3D.git"
   },
-  "keywords": [],
-  "bugs": {
-    "url": "https://github.com/josejaviercanon/bonoboengine.blazorwasm/issues"
-  },
-  "homepage": "https://github.com/josejaviercanon/bonoboengine.blazorwasm#readme",
   "dependencies": {
-    "box2d3-wasm": "^5.2.0",
-    "@pixi/sound": "^6.0.1",
-    "@pixi/tilemap": "^5.0.2",
-    "@pixi/ui": "^2.3.2",
-    "@spd789562/particle-emitter": "^1.0.2",
-    "pixi-filters": "^6.1.5",
-    "pixi-viewport": "^6.0.3",
-    "pixi.js": "^8.19.0"
+    "@babylonjs/core": "^8.0.0"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",

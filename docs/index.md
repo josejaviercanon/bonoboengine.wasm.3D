@@ -8,7 +8,7 @@
 
 Computing your entire game logic inside C#. It allows you to build a single, authoritative simulation engine that runs client-side inside .NET MAUI or Blazor today, and can be dropped directly onto a dedicated .NET Linux server tomorrow for authoritative multiplayer.
 
-To make this architecture work without destroying performance, you must isolate the **Simulation Layer (C#)** from the **Presentation Layer (PixiJS/Tailwind)**.
+To make this architecture work without destroying performance, you must isolate the **Simulation Layer (C#)** from the **Presentation Layer (Babylon.js/Tailwind)**.
 
 Here is the architectural blueprint to achieve this zero-duplicate-work setup.
 
@@ -29,50 +29,47 @@ You should split your codebase into three distinct layers:
                    |                                       |
 +--------------------------------------+   +--------------------------------------+
 |        2. PRESENTATION BRIDGE        |   |       3. FUTURE SERVER HOSTER        |
-|  - Blazor Component Shell            |   |  - ASP.NET Core Minimal API / WebSockets
-|  - IJSRuntime Skinny Bridge          |   |  - Runs the exact same Core Engine   |
-|  - Maps C# State changes to PixiJS   |   |  - Verifies incoming client commands |
+|  - Non-Blazor browser-wasm host      |   |  - ASP.NET Core Minimal API / WebSockets
+|  - [JSImport]/[JSExport] + shared    |   |  - Runs the exact same Core Engine   |
+|    memory (Float32Array over WASM)   |   |  - Verifies incoming client commands |
 +--------------------------------------+   +--------------------------------------+
 ```
 
 1. **The Core Simulation Engine (Pure C#)** — a standard .NET Class Library. It knows absolutely nothing about graphics, rendering, or browsers.
    - *State Management:* manages coordinates, stats, pathfinding matrices, and entity maps.
    - *The Deterministic Tick:* runs the Arch ECS systems each fixed step (e.g., `MovementSystem`, `ColorSystem`) and emits one **batched** render signal (`EcsRenderSignal`) per interval — not one event per entity — so the presentation layer mirrors authoritative state without per-frame interop. A `ProcessCommand` command pattern is the planned input boundary (ADR-003).
-2. **The Presentation Layer (Blazor + PixiJS + Tailwind)** — a pure mirror of your C# state.
-   - *Tailwind UI:* Blazor hooks into C# state to display inventories or menus using standard data-binding.
-   - *PixiJS Canvas:* instead of polling C# for positions 60 times a second, PixiJS sits idle until the C# engine emits a batched render signal. The host streams that batched payload to PixiJS (SSE on the web host; `IJSRuntime` on MAUI Hybrid), and PixiJS animates only the sprites that changed.
+2. **The Presentation Layer (Babylon.js v8 + Tailwind)** — a pure mirror of your C# state.
+   - *Tailwind UI:* DOM overlays for menus, inventories, and HUDs.
+   - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array` over the WASM heap) and updates meshes/cameras per render frame — no per-entity interop calls.
 
 ### ⚠️ The Performance Gold Rule: Avoid JSON Serialization
 
-Polling C# from JavaScript every frame, or serializing the whole state tree per frame, will reduce your game's frame rate down to single digits. You **must** use a **Push-Based Delta Event** approach: the engine emits a batched render signal and the host streams it to PixiJS (SSE on the web host; `IJSRuntime` on MAUI Hybrid).
+Polling C# from JavaScript every frame, or serializing the whole state tree per frame, will reduce your game's frame rate down to single digits. You **must** use a **Push-Based Batched Signal** approach: the engine emits one batched render signal per fixed tick into a pinned `GCHandle` buffer; JS reads it through a `Float32Array` view over the WASM heap (`[JSImport] notifyRender`).
 
-- ❌ **Bad (Polling):** PixiJS loops at 60fps and calls C# via interop — "Where is everyone right now?" C# serializes 500 characters into JSON and passes it back.
-- ✅ **Good (Batched Delta Push):** the C# engine finishes a tick and emits one batched `EcsRenderSignal` (`SpriteState[]`). The web host streams it to PixiJS over SSE (`event: sprite-move`); PixiJS updates only the sprites that changed. (MAUI Hybrid uses `IJSRuntime` for the same batched push.)
+- ❌ **Bad (Polling):** JS loops at display Hz and calls C# via interop — "Where is everyone right now?" C# serializes 500 characters into JSON and passes it back.
+- ✅ **Good (Batched Delta Push):** the C# engine finishes a tick and writes one batched float32 snapshot into shared memory; JS projects a `Float32Array` over the same memory and updates only the meshes that changed. Zero copies, no JSON, no reflection.
 
-**2.1. UI:** keep the presentation layer thin. Use Razor components and Tailwind CSS for menus, inventories, and HUD. Drop a standard HTML5 `<canvas>` inside that Razor view, and use a modular, object-oriented vanilla TypeScript/JavaScript file to initialize PixiJS and map incoming C# events directly to sprites. Bypassing the React wrapper keeps the application simple, clean, and fast.
+**2.1. UI:** keep the presentation layer thin. Use Tailwind CSS for menus, inventories, and HUD. Babylon.js owns the 3D canvas; a modular, object-oriented vanilla TypeScript file (`Frontend/game.ts`) initializes the engine and maps incoming C# signals to mesh transforms.
 
 ## 🧬 Engine Topology: Simulation ↔ Presentation ↔ Render
 
-The Authoritative C# Architecture above splits the **Presentation Bridge** into two further layers at runtime, yielding a three-layer topology (ADR-001). C# is the sole authority; PixiJS is a pure mirror that interpolates and may run presentation physics for visual flair only.
+The Authoritative C# Architecture above splits the **Presentation Bridge** into two further layers at runtime, yielding a three-layer topology (ADR-001). C# is the sole authority; Babylon.js is a pure mirror that interpolates and renders.
 
 ```
-C# AUTHORITATIVE WORLD          ECS + Box2D.NET (target): gameplay physics, collisions, rules
-        │  fixed timestep → RenderSnapshot (Tick, Pos, Velocity)
+C# AUTHORITATIVE WORLD          Arch ECS + BepuPhysics2 (3D rigid-body authority)
+        │  fixed timestep → RenderSnapshot (Tick, Pos, Velocity) → pinned buffer
         ▼
-PRESENTATION WORLD              lightweight interpolation (default) + optional box2d3-wasm 2D
-        │  120/144/240 Hz visual
-        ▼
-PIXIJS v8                       sprites, containers, animation, camera, particles, GPU
+BABYLON.JS v8                   meshes, thin instances, camera, particles, GPU
 ```
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
-- **Domain ownership (ADR-006):** C# owns game rules, collision, gravity, character controllers, deterministic networking. PixiJS owns interpolation, sprite transforms/animation, camera smoothing, secondary motion (cloth/ragdoll), particle physics.
-- **Bridge status:** zero-copy shared memory pipeline implemented (ADR-008): C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α` (ADR-003). Interpolation/box2d3-wasm-coupling implementation guide (math, per-entity `InterpState` buffer, kinematic mirroring): `docs/architecture/render-interpolation.md`.
-- **Physics:** Box2D.NET = authoritative (C# ECS loop, vendored at `src/Box2D.NET`, wired into `Game.Engine` and used by `AsteroidsSimulation`); box2d3-wasm (Box2D v3 WASM) = optional presentation physics, entity-selective, used by the asteroids debris field (ADR-002, ADR-005).
-- **Skeletal animation:** glTF (`.glb`) is the asset contract, not the ECS architecture — two decoupled pipelines (authoring: AI+Blender→`.glb`; runtime: `.glb`→importer→ECS→PixiJS); the animation state machine belongs to the ECS (ADR-004).
-- **Layout sync (zero-copy guardrails):** the C# float32 layout (`SignalBufferLayout` + `SignalBufferEncoders` in `Game.Engine.ECS`) and the TypeScript decoders (`bufferLayout.ts` + per-scene `EntityDecoder`s) are kept in lockstep by `src/Game.Engine.Generators` — a Roslyn analyzer (`BNOBO001` stride mismatch, `BNOBO002` unsupported type) plus a source generator that emits `GeneratedSignalLayout` + a boot-time `[ModuleInitializer]` static assert and writes the generated `src/Game.UI/Frontend/scenes/generated/signalLayout.ts`. Mark every sprite-state struct with `[TypeScriptExport(floatStride)]`.
+- **Domain ownership (ADR-006):** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
+- **Bridge status:** zero-copy shared memory pipeline implemented (ADR-008): C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α` (ADR-003). Implementation guide (math, per-entity `InterpState` buffer): `docs/architecture/render-interpolation.md`.
+- **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`, wired into `Game.Engine` and used by `AsteroidsSimulation` as a 2D-plane world). The old Box2D.NET backend and box2d3-wasm presentation physics were removed (ADR-010/011).
+- **Skeletal animation:** glTF (`.glb`) is the asset contract, not the ECS architecture — two decoupled pipelines (authoring: AI+Blender→`.glb`; runtime: `.glb`→importer→ECS→Babylon.js); the animation state machine belongs to the ECS (ADR-004).
+- **Layout sync (zero-copy guardrails):** the C# float32 layout (`SignalBufferLayout` + `SignalBufferEncoders` in `Game.Engine.ECS`) and the TypeScript decoders are kept in lockstep by `src/Game.Engine.Generators` — a Roslyn analyzer (`BNOBO001` stride mismatch, `BNOBO002` unsupported type) plus a source generator that emits `GeneratedSignalLayout` + a boot-time `[ModuleInitializer]` static assert and writes the generated `src/Game.UI/Frontend/scenes/generated/signalLayout.ts`. Mark every sprite-state struct with `[TypeScriptExport(floatStride)]`. The 3D transform layout (position + quaternion + scale) is a future ADR.
 
-Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/` (ADR-001…ADR-009).
+Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/` (ADR-008…ADR-011).
 
 **Single-player local is the default build (ADR-007).** `SINGLE_PLAYER_LOCAL` is the default C# compilation constant; `npm run build` produces a local-buffer bundle (`__RENDER_SOURCE__='local-buffer'`) with zero HTTP client code. Multiplayer is opt-in: build with `npm run build:web` + `/p:IsMultiplayer=true`.
 
@@ -176,9 +173,11 @@ The SSR page (`GameView.razor`) carries the initial payload to the client throug
 }
 ```
 
-### Step 3: The PixiJS Scene (SSE Consumer)
+### Step 3: The Babylon.js Scene (Zero-Copy Buffer Consumer) — current
 
-`src/Game.UI/Frontend/game.ts` bootstraps PixiJS (`initGame` / `renderText` / `renderScene`). The ECS scene opens an `EventSource` on the SSE URL, parses each `sprite-move` batch, and moves only the sprites that changed — a pure mirror of authoritative C# state. No game rules or boundary checks in JS.
+`src/Game.UI/Frontend/game.ts` bootstraps Babylon.js (`initGame` / `renderText` / `renderScene`). The Babylon scene renders the shared 3D canvas (camera, light, ground) and will map batched float32 snapshots from the pinned buffer onto mesh transforms (per-game renderers are the next iteration). No game rules or boundary checks in JS.
+
+The zero-copy shared memory pipeline (ADR-008) replaces the old SSE/JSON bridge: batched float32 snapshots → pinned `GCHandle` buffer → `Float32Array` over WASM heap → client interpolation (ADR-003). The legacy SSE consumer blueprint below is kept for historical context only.
 
 ```typescript
 // src/Game.UI/Frontend/scenes/ecsSprites.ts (condensed)
@@ -217,7 +216,7 @@ By designing your MVP this way, moving to a multiplayer model becomes a structur
 - You pluck your Shared Core Engine project out of the client build and compile it into a headless ASP.NET Core console application hosted on Linux.
 - Instead of your client UI executing commands directly against a local `GameSimulation` instance, your client UI serializes the `MoveCommand` and shoots it over a SignalR or WebSocket connection.
 - The server runs the command through the exact same C# simulation code, processes the ticks, and broadcasts the batched `EcsRenderSignal` across the network to all connected clients.
-- Your Blazor/PixiJS setup handles the network event exactly like it handled the local event during the MVP phase.
+- Your Babylon.js setup handles the network event exactly like it handled the local event during the MVP phase.
 
 ## Sourced Ecosystem Libraries & Starting Points
 
@@ -225,15 +224,15 @@ The architectural stack uses specialized, lightweight libraries designed for max
 
 - **Game State Engine (Arch ECS):** a high-performance, ultra-lightweight C# Archetype Entity Component System. It avoids rigid class inheritance and allows you to process game world calculations (e.g., matching a parsed Town Entity to its structural Garrison Army Entities) inside structured, flat database-like chunks.
 - **AOT-Friendly Persistence Loop (.NET System.Text.Json Source Generators):** essential for saving/loading mechanics. Using `JsonSourceGenerationOptions` forces compilation to produce specialized metadata ahead-of-time (Native AOT-safe). This ensures fast, allocation-free serialization when passing structural map files, flat JSON configs, and delta-state frames across the .NET-to-JavaScript bridge.
-- **Canvas & Presentation Layer (PixiJS v8):** the leading HTML5 2D rendering pipeline. It provides code-only WebGL/WebGPU hardware acceleration inside the native .NET MAUI `BlazorWebView` container, entirely bypassing heavy game engine overhead.
+- **Canvas & Presentation Layer (Babylon.js v8):** a 3D WebGL2/WebGPU rendering engine (`@babylonjs/core`). Mesh pools, thin instances, cameras, lights, and PBR materials render the authoritative C# state; the zero-copy float32 bridge feeds transforms without per-entity interop.
 - **UI Layout & Theme Canvas (Tailwind CSS):** handles responsive HUDs, non-overlapping contextual menus, popups, inventory windows, and system options cleanly using standard HTML/CSS.
 
 ## Specialized MCP Servers & Knowledge Bases
 
 When working with an MCP-capable AI agent:
 
-- **`docs/2d-games`** and **`docs/game-development`** — structured game design patterns, structural gamedev guides, and documentation contexts aligned with this engine's stack (Arch ECS simulation + PixiJS presentation + Blazor/Tailwind UI). They keep the agent anchored to professional game-loop conventions.
-  - `docs/2d-games` is the "Universal 2D Engine Toolkit" reference, aligned to the Bonobo stack: architecture/reference docs reflect Arch ECS + PixiJS v8 + Tailwind + Blazor + System.Text.Json; concept guides are engine-agnostic.
+- **`docs/2d-games`** and **`docs/game-development`** — structured game design patterns, structural gamedev guides, and documentation contexts aligned with this engine's stack (Arch ECS simulation + Babylon.js presentation + Tailwind UI). They keep the agent anchored to professional game-loop conventions.
+  - `docs/2d-games` is the "Universal 2D Engine Toolkit" reference (kept for game-pattern guidance; 2D renderer specifics are superseded by the Babylon.js 3D migration).
   - `docs/game-development` is the curated, engine-agnostic subset (concepts, programming, game design, project management, AI workflow).
   - `docs/game-entity-component-system/` mirrors the toolkit reorganized into `guides/` + `reference/` and carries the Bonobo-specific ECS rules (`bonobo-ECS-rules.md`).
 - **`net-microsoft-documentation` MCP server:** connects to Microsoft Learn via streamable HTTP, letting agents search documentation, fetch complete articles, and search code samples — trusted, up-to-date Microsoft knowledge ([source](https://learn.microsoft.com/en-us/training/support/mcp)).

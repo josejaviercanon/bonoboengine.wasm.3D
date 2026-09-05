@@ -8,7 +8,7 @@ Three test projects cover the simulation/presentation split. All commands verifi
 |---|---|---|---|
 | `src/Game.Tests` | C#, **xUnit v3** (MTP runner) | Determinism self-checks, ECS simulation unit tests, snapshot shape | `dotnet test src/Game.Tests` |
 | `src/Game.Tests.Aot` | C#, **TUnit** (MTP runner) | AOT/trim pattern checks over the `Game.Engine` closure (no ReflectionEmit, no runtime package refs, DependencyContext behavior) | `dotnet test src/Game.Tests.Aot` |
-| `src/Game.Tests.UI` | **Node/TypeScript, Playwright** | E2E against the real `Game.Wasm` host (static shell, WASM boot, PixiJS bootstrap, asset serving) | `cd src/Game.Tests.UI && npx playwright test` |
+| `src/Game.Tests.UI` | **Node/TypeScript, Playwright** | E2E against the real `Game.Wasm` host (static shell, WASM boot, Babylon.js bootstrap, asset serving) | `cd src/Game.Tests.UI && npx playwright test` |
 
 `Game.Tests` and `Game.Tests.Aot` are in `bonoboWebGame.slnx`; `Game.Tests.UI` is a Node project (no `.csproj`) and runs via npm.
 
@@ -21,13 +21,13 @@ Three test projects cover the simulation/presentation split. All commands verifi
 
 ## Playwright (Game.Tests.UI) — rules and caveats
 
-- **Chrome channel only**: config uses `channel: 'chrome'` (installed Chrome, no bundled browser download). For manual agent driving use `playwright-cli open --browser=chrome`.
+- **Chrome channel only**: config uses `channel: 'chrome'` (installed Chrome, no bundled browser download). Machines without a system Chrome build point at a Playwright chromium via `GAME_WEB_CHROME` (config maps it to `executablePath`). For manual agent driving use `playwright-cli open --browser=chrome`.
 - Config (`playwright.config.ts`): port **5902**, `webServer` boots `dotnet run --project ../../src/Game.Wasm` with `ASPNETCORE_URLS` env var. Set `GAME_WEB_EXTERNAL_URL` to reuse an already-running host.
 - `workers: 1`, `fullyParallel: false` — the host holds singleton simulations.
 - npm scripts: `test`, `test:headed`, `test:ui`, `report`, `typecheck`. Run `npm run typecheck` after spec edits.
 - **Static-asset 500s after touching `Game.UI` assets**: `dist/*` (game-bundle.js, app.css) returning 500 means the `CopyGameUIAssets` MSBuild target didn't copy them to `Game.Wasm/wwwroot`. Kill all `Game.Wasm.exe` (`taskkill //F //IM Game.Wasm.exe`), delete `src/Game.Wasm/bin` + `src/Game.Wasm/obj`, then rebuild. Never build while a host is running.
 - **Bootstrap timing**: `game-bundle.js` is an ES module with dynamic imports; its execution can finish *after* the window `load` event. The WASM boot (`main.mjs` → `dotnet.js` → runtime) also takes time. Tests assert canvas visibility with a 60 s timeout — do not shrink these without understanding cold-load module fetches.
-- `/hello` `data-message` payload is plain text, not JSON. Home heading text is `PixiJS Examples` (there is no `<title>`).
+- `/hello` `data-message` payload is plain text, not JSON. Home heading text is `Bonobo Engine` (there is no `<title>`).
 
 ## Standalone Screenshot Scripts (ESM Context)
 

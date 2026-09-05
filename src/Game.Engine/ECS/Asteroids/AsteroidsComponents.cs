@@ -1,5 +1,5 @@
 using Arch.AOT.SourceGenerator;
-using Box2D.NET;
+using BepuPhysics;
 using Game.Engine.Interop;
 
 namespace Game.Engine.ECS.Asteroids;
@@ -18,12 +18,12 @@ public static class AsteroidsConfig
     public const float CourtWidth = 800f;
     public const float CourtHeight = 600f;
 
-    /// <summary>Court pixels per Box2D meter. Box2D bodies live in a 80 x 60 m world.</summary>
+    /// <summary>Court pixels per Bepu meter. Bepu bodies live in a 8 x 6 m world.</summary>
     public const float PixelsPerMeter = 100f;
 
     public const double TickIntervalSeconds = 1.0 / 60.0;
 
-    /// <summary>Box2D sub-steps per fixed tick (Bullets use CCD; 4 sub-steps keep contacts crisp).</summary>
+    /// <summary>Bepu solver sub-steps per fixed tick (Bullets use passive CCD; 4 sub-steps keep contacts crisp).</summary>
     public const int SubStepCount = 4;
 
     /// <summary>Bodies re-enter on the opposite edge once fully past this margin.</summary>
@@ -137,28 +137,35 @@ public static class AsteroidsConfig
     public const float ExplosionLifeSeconds = 0.5f;
     public const float ShipExplosionLifeSeconds = 1f;
 
-    // --- Box2D collision categories ---------------------------------------------------
+    // --- Bepu collision categories -----------------------------------------------
 
-    public const ulong CatShip = 0x0001;
-    public const ulong CatAsteroid = 0x0002;
-    public const ulong CatBullet = 0x0004;
-    public const ulong CatSaucer = 0x0008;
-    public const ulong CatMissile = 0x0010;
+    /// <summary>Per-body collision category (mirrors <see cref="AsteroidsSpriteKind"/> ordering for the client).</summary>
+    public enum PhysicsCategory : byte
+    {
+        Ship = 0,
+        Asteroid = 1,
+        Bullet = 2,
+        Saucer = 3,
+        Missile = 4
+    }
 
-    /// <summary>Ship collides with asteroids, saucer and missiles (never its own bullets).</summary>
-    public const ulong MaskShip = CatAsteroid | CatSaucer | CatMissile;
+    /// <summary>
+    ///     Pair-allowed contact matrix (equivalent to the old Box2D category/mask filters).
+    ///     Ship collides with asteroids/saucer/missiles (never its own bullets); asteroids
+    ///     pass through each other; bullets hit asteroids/saucer/missiles only.
+    /// </summary>
+    public static readonly bool[,] ContactFilter = new bool[5, 5]
+    {
+        //             Ship   Ast    Bullet Saucer Missile
+        /* Ship    */ { false, true,  false, true,  true },
+        /* Asteroid*/ { true,  false, true,  false, false },
+        /* Bullet  */ { false, true,  false, true,  true },
+        /* Saucer  */ { true,  false, true,  false, false },
+        /* Missile */ { true,  false, true,  false, false },
+    };
 
-    /// <summary>Asteroids collide with bullets and the ship only - they pass through each other.</summary>
-    public const ulong MaskAsteroid = CatBullet | CatShip;
-
-    /// <summary>Bullets hit asteroids, saucer and missiles (never the ship, never each other).</summary>
-    public const ulong MaskBullet = CatAsteroid | CatSaucer | CatMissile;
-
-    /// <summary>Saucer collides with bullets and the ship.</summary>
-    public const ulong MaskSaucer = CatBullet | CatShip;
-
-    /// <summary>Missiles collide with bullets and the ship.</summary>
-    public const ulong MaskMissile = CatBullet | CatShip;
+    /// <summary>True when two collision categories are allowed to make contact.</summary>
+    public static bool CanCollide(PhysicsCategory a, PhysicsCategory b) => ContactFilter[(int)a, (int)b];
 }
 
 /// <summary>Asteroid size levels: <c>Small = 1</c> ... <c>Large = 3</c> (reference enum).</summary>
@@ -256,17 +263,17 @@ public struct ExplosionTag
 }
 
 /// <summary>
-///     Box2D body handle owned by the entity. Positions/rotations in ECS are mirrors
-///     of the Box2D body state (authoritative physics, ADR-002).
+///     BepuPhysics2 body handle owned by the entity. Positions/rotations in ECS are
+///     mirrors of the Bepu body state (authoritative physics, ADR-002/011).
 /// </summary>
 [Component]
 public struct PhysicsBody
 {
-    public B2BodyId BodyId;
+    public BodyHandle Handle;
 
-    public PhysicsBody(B2BodyId bodyId)
+    public PhysicsBody(BodyHandle handle)
     {
-        BodyId = bodyId;
+        Handle = handle;
     }
 }
 

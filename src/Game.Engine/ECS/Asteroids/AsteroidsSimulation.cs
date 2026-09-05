@@ -37,8 +37,8 @@ public partial record AsteroidsRenderSignal
 }
 
 /// <summary>
-///     Owns the asteroids Arch ECS world + Box2D physics world. The sim ticks at
-///     60 Hz; the Box2D world is the authoritative mover and collider (ADR-002), the
+///     Owns the asteroids Arch ECS world + BepuPhysics2 simulation world. The sim ticks
+///     at 60 Hz; Bepu is the authoritative mover and collider (ADR-002/011), the
 ///     gameplay system resolves contacts into split/explode/score events and emits
 ///     one batched <see cref="AsteroidsRenderSignal"/> per tick. Input is suggested
 ///     by the client and applied by the simulation (C# sole authority, ADR-001/006).
@@ -290,7 +290,7 @@ public sealed class AsteroidsSimulation : IDisposable
                 new BulletTag(0f));
             _ctx.Register(entity);
             _gameSystem.CreateBodyForTest(entity, AsteroidsConfig.BulletRadius,
-                AsteroidsConfig.CatBullet, AsteroidsConfig.MaskBullet, isBullet: true);
+                AsteroidsConfig.PhysicsCategory.Bullet);
         }
     }
 

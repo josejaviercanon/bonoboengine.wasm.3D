@@ -17,14 +17,11 @@ export default defineConfig(({ mode }) => ({
       entry: resolve(__dirname, 'Frontend/game.ts'),
       name: 'GameViewport',
       fileName: 'game-bundle',
-      // ES module: box2d3-wasm ships ESM + `import.meta.url` wasm asset; loaded via <script type="module">.
+      // ES module: Babylon.js ships ESM; loaded via <script type="module">.
       formats: ['es']
     },
     outDir: resolve(__dirname, 'wwwroot/dist'), // Exports directly to Blazor assets
     emptyOutDir: true,
     sourcemap: true
-  },
-  worker: {
-    format: 'es' // box2d3-wasm deluxe module uses Worker{type:'module'} for pthreads
   }
 }));

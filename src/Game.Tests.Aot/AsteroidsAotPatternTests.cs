@@ -7,7 +7,6 @@ namespace Game.Tests.Aot;
 /// <summary>
 ///     Fixed-determinism pattern checks for the asteroids authority. Runs under TUnit
 ///     so the same assertions are exercised through a second, AOT-friendly test engine.
-///     Not in parallel: Box2D keeps a static world table shared by every simulation.
 /// </summary>
 [NotInParallel]
 public class AsteroidsAotPatternTests

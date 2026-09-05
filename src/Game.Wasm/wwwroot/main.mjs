@@ -1,7 +1,23 @@
 import { dotnet } from './_framework/dotnet.js';
 import { notifyRender, setupProvider } from './js/wasm-interop.js';
 
-const dbg = (...args) => console.log('[pixi-debug]', ...args);
+const dbg = (...args) => console.log('[babylon-debug]', ...args);
+
+// Welcome modal: click Continue to enable audio and dismiss. Attached BEFORE any
+// top-level await (the WASM runtime boots for seconds) so an early click is never lost.
+const welcomeModal = document.getElementById('welcome-modal');
+const continueBtn = document.getElementById('welcome-continue');
+if (welcomeModal && continueBtn) {
+    continueBtn.addEventListener('click', () => {
+        // Unlock audio context (browser autoplay policy)
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+            const ctx = new AudioContext();
+            ctx.resume().catch(() => {});
+        }
+        welcomeModal.style.display = 'none';
+    });
+}
 
 // Bootstrap .NET runtime
 const runtime = await dotnet.withApplicationArguments("start").create();
@@ -13,7 +29,7 @@ setModuleImports('WasmInterop', { notifyRender });
 const config = getConfig();
 const exports = await getAssemblyExports(config.mainAssemblyName);
 
-// Register local-buffer provider with Pixi bundle (handles command routing + signals)
+// Register local-buffer provider with the Babylon bundle (command routing + signals)
 setupProvider(exports);
 
 // Run C# Main() — initializes SimHost
@@ -23,7 +39,6 @@ await runMain();
 const exampleList = JSON.parse(exports.Game.Wasm.WasmInterop.ListExamples());
 const groups = [...new Set(exampleList.map(e => e.group))];
 const games = exampleList.filter(e => e.group === 'Games');
-const examples = exampleList.filter(e => e.group !== 'Games');
 
 function buildToolbar() {
     const toolbar = document.createElement('div');
@@ -37,32 +52,8 @@ function buildToolbar() {
 
     const title = document.createElement('span');
     title.style.cssText = 'font-size:0.75rem;color:#94a3b8;';
-    title.textContent = 'PixiJS Examples';
+    title.textContent = 'Bonobo Engine — Babylon.js';
     left.appendChild(title);
-
-    // Example selector
-    const exampleSelect = document.createElement('select');
-    exampleSelect.id = 'example-select';
-    exampleSelect.style.cssText =
-        'background:#0f172a;color:#e2e8f0;border:1px solid #334155;' +
-        'border-radius:0.375rem;padding:0.375rem 0.5rem;font-size:0.875rem;';
-    for (const g of [...new Set(examples.map(e => e.group))]) {
-        const optgroup = document.createElement('optgroup');
-        optgroup.label = g;
-        for (const item of examples.filter(e => e.group === g)) {
-            const opt = document.createElement('option');
-            opt.value = item.id;
-            opt.textContent = item.title;
-            optgroup.appendChild(opt);
-        }
-        exampleSelect.appendChild(optgroup);
-    }
-    left.appendChild(exampleSelect);
-
-    const sep = document.createElement('span');
-    sep.style.cssText = 'font-size:0.75rem;color:#94a3b8;';
-    sep.textContent = 'Games';
-    left.appendChild(sep);
 
     // Game selector
     const gameSelect = document.createElement('select');
@@ -82,51 +73,31 @@ function buildToolbar() {
     }
     left.appendChild(gameSelect);
 
-    // Selection handler: switch game sim first, then fetch payload, then render
-    const onSelect = async (id) => {
+    // Selection handler: switch game sim first, then fetch payload. 3D game
+    // renderers land in a later iteration — the sim runs headless for now.
+    const onSelect = (id) => {
         exports.Game.Wasm.WasmInterop.SwitchGame(id);
         const payload = exports.Game.Wasm.WasmInterop.GetExamplePayload(id);
         if (typeof window.renderScene === 'function') {
-            await window.renderScene(payload);
+            void window.renderScene(payload);
         }
     };
-    exampleSelect.addEventListener('change', () => onSelect(exampleSelect.value));
     gameSelect.addEventListener('change', () => onSelect(gameSelect.value));
 
-    const right = document.createElement('div');
-    right.style.cssText = 'display:flex;align-items:center;gap:0.5rem;';
-    const statsBtn = document.createElement('button');
-    statsBtn.type = 'button';
-    statsBtn.textContent = 'PixiJS Stats';
-    statsBtn.style.cssText =
-        'background:#0f172a;color:#e2e8f0;border:1px solid #334155;' +
-        'border-radius:0.375rem;padding:0.375rem 0.5rem;font-size:0.75rem;cursor:pointer;';
-    statsBtn.addEventListener('click', () => window.togglePixiStats?.());
-    const csStatsBtn = document.createElement('button');
-    csStatsBtn.type = 'button';
-    csStatsBtn.textContent = 'C# Stats';
-    csStatsBtn.style.cssText =
-        'background:#0f172a;color:#e2e8f0;border:1px solid #334155;' +
-        'border-radius:0.375rem;padding:0.375rem 0.5rem;font-size:0.75rem;cursor:pointer;';
-    csStatsBtn.addEventListener('click', () => window.toggleCSharpStats?.());
-    right.appendChild(statsBtn);
-    right.appendChild(csStatsBtn);
-
     toolbar.appendChild(left);
-    toolbar.appendChild(right);
     document.body.prepend(toolbar);
 
-    return { exampleSelect, gameSelect };
+    return { gameSelect };
 }
 
-const { exampleSelect, gameSelect } = buildToolbar();
+const { gameSelect } = buildToolbar();
 
-// Wait for pixi bundle then init canvas (blank, no scene)
-async function bootPixi() {
+// Wait for the Babylon bundle then init the canvas (shared 3D scene, no game renderer yet)
+async function bootRenderer() {
     if (typeof window.initGame !== 'function') {
         await new Promise(resolve => {
             const check = () => {
-                if (typeof window.initGame === 'function' && document.getElementById('pixi-viewport')) {
+                if (typeof window.initGame === 'function' && document.getElementById('render-viewport')) {
                     resolve();
                 } else {
                     setTimeout(check, 50);
@@ -135,22 +106,7 @@ async function bootPixi() {
             check();
         });
     }
-    await window.initGame('pixi-viewport');
+    await window.initGame('render-viewport');
 }
 
-await bootPixi();
-
-// Welcome modal: click Continue to enable audio and dismiss
-const welcomeModal = document.getElementById('welcome-modal');
-const continueBtn = document.getElementById('welcome-continue');
-if (welcomeModal && continueBtn) {
-    continueBtn.addEventListener('click', () => {
-        // Unlock audio context (browser autoplay policy)
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (AudioContext) {
-            const ctx = new AudioContext();
-            ctx.resume().catch(() => {});
-        }
-        welcomeModal.style.display = 'none';
-    });
-}
+await bootRenderer();

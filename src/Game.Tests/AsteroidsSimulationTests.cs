@@ -5,9 +5,9 @@ using Xunit;
 namespace Game.Tests;
 
 /// <summary>
-///     Unit tests for the authoritative asteroids simulation (Box2D.NET physics in C#,
-///     C# sole authority - ADR-001/002/006). Rules are ported from the reference game
-///     (<c>src/Temp/AsteroidsWasm/Asteroids.Standard</c>).
+///     Unit tests for the authoritative asteroids simulation (BepuPhysics2 in C#,
+///     C# sole authority - ADR-001/002/006/011). Rules are ported from the reference
+///     game (<c>src/Temp/AsteroidsWasm/Asteroids.Standard</c>).
 /// </summary>
 public class AsteroidsSimulationTests
 {
@@ -99,9 +99,11 @@ public class AsteroidsSimulationTests
 
         var state = sim.ShipStateForTest();
         Assert.True(state.Alive);
-        // Classic decay equilibrium: accel / (1 - decay) = 7.2 px/s; ~87% there after 2 s.
+        // Classic decay equilibrium: accel × dt / (1 - decay) = 720 px/s (court px);
+        // ~87% there after 2 s. Velocities are px/s (the 100× meter conversion is
+        // applied only at the Bepu body boundary).
         var speed = MathF.Sqrt((state.VX * state.VX) + (state.VY * state.VY));
-        Assert.InRange(speed, 4f, 8f);
+        Assert.InRange(speed, 500f, 800f);
     }
 
     [Fact]
@@ -151,7 +153,9 @@ public class AsteroidsSimulationTests
 
         // Small asteroid radius ~18; bullet starts outside the collision circle.
         sim.PlaceBulletAt(140f, 100f, -AsteroidsConfig.BulletSpeed, 0f);
-        for (var i = 0; i < 30; i++)
+        // 25 ticks: the bullet has long hit (0.5 s explosion still active, so the
+        // level-clear belt respawn has not fired yet).
+        for (var i = 0; i < 25; i++)
         {
             sim.StepOnce();
         }
@@ -230,12 +234,15 @@ public class AsteroidsSimulationTests
         {
             sim.PlaceBulletAt(x + 30f, 300f, -AsteroidsConfig.BulletSpeed, 0f);
         }
-        for (var i = 0; i < 30; i++)
+        for (var i = 0; i < 2; i++)
         {
             sim.StepOnce();
         }
 
         Assert.Equal(1000, sim.Score);
+        // The saucer spawns the tick the threshold is reached, then leaves after
+        // SaucerMaxPasses crossings (~6 ticks at its 24000 px/s cruise speed) —
+        // assert the spawn, not late-tick survival.
         Assert.True(sim.SaucerAliveForTest());
     }
 

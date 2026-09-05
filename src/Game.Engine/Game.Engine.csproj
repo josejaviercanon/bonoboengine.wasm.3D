@@ -17,7 +17,10 @@
     <ProjectReference Include="..\Arch\Arch.csproj" />
     <ProjectReference Include="..\Arch.Generators\Arch.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Game.Engine.Generators\Game.Engine.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\Box2D.NET\Box2D.NET.csproj" />
+    <!-- Authoritative 3D physics (ADR-011): BepuPhysics2, vendored. Deterministic
+         single-threaded simulation on the browser-wasm host (null ThreadDispatcher). -->
+    <ProjectReference Include="..\bepuphysics2\BepuPhysics\BepuPhysics.csproj" />
+    <ProjectReference Include="..\bepuphysics2\BepuUtilities\BepuUtilities.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,150 +1,114 @@
-import { Application, Text, TextStyle } from 'pixi.js';
-import { registerLocalBufferProvider, type LocalBufferProvider } from './scenes/signalSource';
-import { attachCSharpStatsOverlay, attachStatsOverlay, toggleCSharpStats, togglePixiStats } from './stats/overlays';
-import { initSceneManager, mountScene } from './scenes/sceneManager';
-import type { ScenePayload } from './scenes/sceneManager';
+import { Engine } from '@babylonjs/core/Engines/engine';
+import { Scene } from '@babylonjs/core/scene';
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
+import { Vector3, Color3, Color4 } from '@babylonjs/core/Maths/math';
+import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
+import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { registerLocalBufferProvider, type LocalBufferProvider } from './signalSource';
 
 // Debug helper: every interop entry/exit point logs under one prefix so the
 // whole pipeline is traceable from the browser console (F12).
-const dbg = (...args: unknown[]) => console.log('[pixi-debug]', ...args);
+const dbg = (...args: unknown[]) => console.log('[babylon-debug]', ...args);
 
 declare global {
     interface Window {
         initGame: (containerId: string) => Promise<void>;
         renderText: (message: string) => void;
         renderScene: (message: string) => Promise<void>;
-        togglePixiStats: () => void;
-        toggleCSharpStats: () => void;
         registerLocalBufferProvider: (provider: LocalBufferProvider) => void;
     }
 }
 
-let app: Application | null = null;
+let engine: Engine | null = null;
+let scene: Scene | null = null;
 let container: HTMLElement | null = null;
-let messageText: Text | null = null;
 
 export async function initGame(containerId: string): Promise<void> {
     dbg('initGame called, containerId =', containerId);
 
     container = document.getElementById(containerId);
     if (!container) {
-        console.error(`[pixi-debug] container '#${containerId}' NOT found in DOM`);
+        console.error(`[babylon-debug] container '#${containerId}' NOT found in DOM`);
         return;
     }
     dbg('container found, client size =', container.clientWidth, 'x', container.clientHeight);
 
-    // Give the browser layout engine 50ms to calculate physical dimensions
     await new Promise((resolve) => setTimeout(resolve, 50));
     dbg('layout wait done, client size now =', container.clientWidth, 'x', container.clientHeight);
 
-    // Ensure the container actually has a height and width now
     if (container.clientWidth === 0 || container.clientHeight === 0) {
-        console.warn(`[pixi-debug] PixiJS Target Container '${containerId}' has a 0px boundary size. Forcing fallback dimensions.`);
-        container.style.width = "100vw";
-        container.style.height = "100vh";
+        console.warn(`[babylon-debug] render target '#${containerId}' has a 0px boundary. Forcing fallback dimensions.`);
+        container.style.width = '100vw';
+        container.style.height = '100vh';
     }
 
-    dbg('creating PixiJS Application');
-    app = new Application();
+    // Babylon.js 8 — WebGL2 (WebGPU opt-in). The canvas is sized by Babylon and
+    // appended into the host container; the simulation keeps ticking headless in
+    // C# while the scene renders the shared-memory entity buffer (future game
+    // renderers read the Float32Array bridge via signalSource.ts).
+    const canvas = document.createElement('canvas');
+    canvas.id = 'render-canvas';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.display = 'block';
+    container.appendChild(canvas);
 
-    // Initialize with fallback bounds if resizeTo yields zero size
-    await app.init({
-        //preference: 'webgpu', // Forces PixiJS to prioritize WebGPU
-        resizeTo: container,
-        backgroundAlpha: 1, // opaque canvas: avoids driver/compositor blank-canvas issues with transparent WebGL
-        autoDensity: true, // set canvas CSS size to screen size; without it the canvas keeps its DPR-scaled
-        // buffer size on HiDPI displays and overflows the viewport (content appears off-screen)
-        antialias: true,
-        hello: true // Forces PixiJS to log its boot signature to the console to verify execution
+    engine = new Engine(canvas, true, { antialias: true, stencil: true, preserveDrawingBuffer: true });
+    scene = new Scene(engine);
+    scene.clearColor = new Color4(0.012, 0.016, 0.031, 1);
+
+    // ArcRotate camera: orbit + zoom + pan (built-in pointer/wheel control).
+    const camera = new ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 3, 24, Vector3.Zero(), scene);
+    camera.attachControl(canvas, true);
+    camera.minZ = 0.1;
+    camera.maxZ = 500;
+
+    const light = new HemisphericLight('light', new Vector3(0.4, 1, 0.2), scene);
+    light.intensity = 0.9;
+
+    // Minimal identifiable 3D content: floor + floating cube.
+    const ground = CreateGround('ground', { width: 40, height: 40 }, scene);
+    const groundMat = new StandardMaterial('ground-mat', scene);
+    groundMat.diffuseColor = new Color3(0.07, 0.1, 0.2);
+    groundMat.specularColor = new Color3(0.02, 0.02, 0.02);
+    ground.material = groundMat;
+
+    const box = CreateBox('demo-box', { size: 2 }, scene);
+    const boxMat = new StandardMaterial('box-mat', scene);
+    boxMat.diffuseColor = new Color3(0.98, 0.45, 0.22);
+    boxMat.specularColor = new Color3(0.2, 0.2, 0.2);
+    box.material = boxMat;
+    box.position = new Vector3(0, 1.6, 0);
+
+    // Gentle idle spin so the canvas visibly renders even before any game
+    // renderer is mounted.
+    scene.onBeforeRenderObservable.add(() => {
+        box.rotation.y += 0.01;
     });
 
-    // Check which renderer actually loaded, Output will tell you if it's 'webgpu' or 'webgl'
-    dbg("Pixy Active Renderer Type:", app.renderer.type); 
-    dbg('app.init succeeded, canvas size =', app.canvas.width, 'x', app.canvas.height);
+    engine.runRenderLoop(() => scene?.render());
+    window.addEventListener('resize', () => engine?.resize());
 
-    container.appendChild(app.canvas);
-    dbg('canvas appended to container');
-
-    initSceneManager(app);
-
-    attachStatsOverlay(app.ticker);
-    attachCSharpStatsOverlay();
-
-    // Re-center the message whenever the window/viewport resizes
-    window.addEventListener('resize', centerMessage);
+    dbg('Babylon engine initialized:', engine.getClassName(), 'canvas', canvas.width, 'x', canvas.height);
 }
 
 export function renderText(message: string): void {
-    dbg('renderText called, message =', JSON.stringify(message));
-
-    if (!app || !container) {
-        console.error('[pixi-debug] renderText skipped: PixiJS app or container is not initialized');
-        return;
-    }
-
-    if (!messageText) {
-        dbg('creating PixiJS Text object');
-        const textStyle = new TextStyle({
-            fontFamily: 'Arial',
-            fontSize: 36,
-            fontWeight: 'bold',
-            fill: '#ffffff'
-        });
-
-        messageText = new Text({ text: '', style: textStyle });
-        messageText.anchor.set(0.5);
-        app.stage.addChild(messageText);
-        dbg('Text created and added to stage');
-    }
-
-    messageText.text = message;
-    dbg('text set, measured size =', messageText.width, 'x', messageText.height);
-
-    centerMessage();
-}
-
-function centerMessage(): void {
-    if (!messageText || !container) return;
-    messageText.x = container.clientWidth / 2;
-    messageText.y = container.clientHeight / 2;
-    dbg('message centered at', messageText.x, ',', messageText.y);
+    dbg('renderText called (no DOM overlay yet), message =', JSON.stringify(message));
 }
 
 /**
  * Entry point for the examples pipeline. The SSR payload is a JSON string with
- * an `exampleId`; dispatch to the matching scene builder via sceneManager.
- * Plain strings fall back to the legacy centered-text rendering (page "/").
+ * an `exampleId`; game renderers are built on Babylon in a later iteration —
+ * for now the sim switches in C# and the shared 3D scene keeps rendering.
  */
 export async function renderScene(message: string): Promise<void> {
     dbg('renderScene called, message =', JSON.stringify(message));
-
-    if (!app || !container) {
-        console.error('[pixi-debug] renderScene skipped: PixiJS app or container is not initialized');
+    if (!engine || !scene) {
+        console.error('[babylon-debug] renderScene skipped: Babylon engine not initialized');
         return;
     }
-
-    // Destroy any lingering messageText from renderText fallback
-    if (messageText) {
-        messageText.destroy();
-        messageText = null;
-    }
-
-    let payload: ScenePayload | null = null;
-    try {
-        const parsed: unknown = JSON.parse(message);
-        if (parsed && typeof parsed === 'object') {
-            payload = parsed as ScenePayload;
-        }
-    } catch {
-        payload = null;
-    }
-
-    if (!payload?.exampleId) {
-        renderText(message);
-        return;
-    }
-
-    await mountScene(payload);
 }
 
 dbg('game-bundle loaded, exposing window.initGame / window.renderText / window.renderScene');
@@ -152,13 +116,10 @@ dbg('game-bundle loaded, exposing window.initGame / window.renderText / window.r
 window.initGame = initGame;
 window.renderText = renderText;
 window.renderScene = renderScene;
-window.togglePixiStats = togglePixiStats;
-window.toggleCSharpStats = toggleCSharpStats;
 // ADR-007 Phase 2/3: the co-located Game.Wasm host registers its in-process
 // command/signal bridge through this global (see wwwroot/index.html of that host).
 window.registerLocalBufferProvider = registerLocalBufferProvider;
 
 // Module evaluation finished — all globals above exist. The Game.Wasm host
 // listens for this event instead of polling for registerLocalBufferProvider.
-window.dispatchEvent(new Event('pixi-bundle-ready'));
-
+window.dispatchEvent(new Event('babylon-bundle-ready'));

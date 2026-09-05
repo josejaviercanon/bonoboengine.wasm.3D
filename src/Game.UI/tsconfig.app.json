@@ -15,7 +15,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
-    "skipLibCheck": true, // Speeds up compilation by skipping PixiJS internal .d.ts checking
+    "skipLibCheck": true, // Speeds up compilation by skipping Babylon.js internal .d.ts checking
 
     /* Interop Options */
     "isolatedModules": true,

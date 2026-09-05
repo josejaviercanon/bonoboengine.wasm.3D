@@ -123,7 +123,7 @@ export function setupProvider(exports) {
     if (typeof window.registerLocalBufferProvider === 'function') {
         window.registerLocalBufferProvider(_provider);
     } else {
-        window.addEventListener('pixi-bundle-ready', () => {
+        window.addEventListener('babylon-bundle-ready', () => {
             window.registerLocalBufferProvider(_provider);
         }, { once: true });
     }

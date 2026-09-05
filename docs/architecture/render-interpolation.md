@@ -1,10 +1,10 @@
-# Render Interpolation & Presentation-Physics Coupling — Implementation Guide
+# Render Interpolation — Implementation Guide
 
-> Reviewed blueprint for the dual-physics, asymmetric-language topology (C# Box2D.NET authoritative sim ← boundary → TypeScript PixiJS + optional box2d3-wasm presentation). Grounded in verified code: `src/Game.UI/Frontend/scenes/asteroids.ts` (reference pattern), `snake.ts`, and ADR-003/005/006. When code and prose disagree, verified files win.
+> Reviewed blueprint for the authoritative-sim ← boundary → presentation interpolation math (C# ECS sim ← shared-memory bridge → TypeScript Babylon.js). The original dual-physics sections (Box2D.NET authoritative + box2d3-wasm presentation) were **removed with the 3D migration** (ADR-010/011); the interpolation math below remains the pattern the Babylon game renderers will use (LERP over the float32 shared buffers). When code and prose disagree, verified files win.
 
 ## 1. Mathematical Foundation
 
-The authoritative C# simulation runs a fixed timestep `Δt_sim` (e.g., 16.66 ms for 60 Hz). The PixiJS presentation runs at the display's variable rate (60/144/240 Hz). Mapping incoming snapshots directly onto sprites produces stepped motion whenever display Hz > sim Hz. The client therefore treats itself as a **delayed, state-buffering consumer** and evaluates each frame at a fractional progression `α` between the last two authoritative states:
+The authoritative C# simulation runs a fixed timestep `Δt_sim` (e.g., 16.66 ms for 60 Hz). The Babylon presentation runs at the display's variable rate (60/144/240 Hz). Mapping incoming snapshots directly onto meshes produces stepped motion whenever display Hz > sim Hz. The client therefore treats itself as a **delayed, state-buffering consumer** and evaluates each frame at a fractional progression `α` between the last two authoritative states:
 
 ```
 α = (T_now − T_last_signal) / Δt_sim        (clamped to [0, 1] — no extrapolation)
@@ -84,7 +84,7 @@ const onTicker = (ticker: Ticker) => {
 };
 ```
 
-`dt` clamping (`Math.min(deltaMS/1000, 1/30)`) matters for the particle emitters and any box2d3-wasm stepping — a background-tab stall must not inject a multi-second physics jump.
+`dt` clamping (`Math.min(deltaMS/1000, 1/30)`) matters for any per-frame presentation system — a background-tab stall must not inject a multi-second physics jump.
 
 ### Implementation status per scene
 
@@ -97,11 +97,13 @@ const onTicker = (ticker: Ticker) => {
 
 Extending generic `SpriteState` → `TransformSnapshot` (velocity/rotation/tick, ADR-003) plus this buffer pattern in `ecsSprites.ts` is the open bridge-evolution task.
 
-## 3. Coupling box2d3-wasm (presentation) with Box2D.NET (authoritative)
+## 3. Removed: JS presentation physics (box2d3-wasm)
 
-**Asymmetric rigidity:** authoritative bodies drive the presentation world; the presentation world never exerts forces back onto authoritative bodies. In the box2d3-wasm world, mirrored authoritative entities use `b2BodyType.b2_kinematicBody`; pure presentation bodies (debris, sparks, cloth) use `b2BodyType.b2_dynamicBody`. Collision resolution is one-way: kinematic → dynamic.
+> **Superseded in ADR-010/011.** The dual-physics topology (Box2D.NET authoritative + box2d3-wasm JS presentation) is gone: the authoritative engine is now BepuPhysics2 inside the C# ECS loop, and the presentation layer is Babylon.js. The old kinematic-mirroring contract below is kept only as historical context — do not reintroduce a JS physics world.
 
-Verified API (`box2d3-wasm` v5.2.0): `b2DefaultBodyDef()`, `b2BodyType.b2_kinematicBody`, `b2Body_SetTransform(bodyId, b2Vec2, b2Rot)`, `b2Body_SetLinearVelocity(bodyId, b2Vec2)`, `b2Body_SetType(bodyId, b2BodyType)`.
+**Asymmetric rigidity (historical):** authoritative bodies drive the presentation world; the presentation world never exerts forces back onto authoritative bodies. In the box2d3-wasm world, mirrored authoritative entities used `b2BodyType.b2_kinematicBody`; pure presentation bodies (debris, sparks, cloth) used `b2BodyType.b2_dynamicBody`. Collision resolution was one-way: kinematic → dynamic.
+
+Verified API (box2d3-wasm v5.2.0): `b2DefaultBodyDef()`, `b2BodyType.b2_kinematicBody`, `b2Body_SetTransform(bodyId, b2Vec2, b2Rot)`, `b2Body_SetLinearVelocity(bodyId, b2Vec2)`, `b2Body_SetType(bodyId, b2BodyType)`.
 
 ```typescript
 function updateBox2D3KinematicBody(id: number, x: number, y: number, rotation: number): void {
@@ -113,32 +115,31 @@ function updateBox2D3KinematicBody(id: number, x: number, y: number, rotation: n
 }
 ```
 
-Ticker flow, in order:
+Ticker flow (historical), in order:
 
 1. Compute interpolated `P_render` for each authoritative entity (Section 2).
-2. Push it into its box2d3-wasm kinematic body via `b2Body_SetTransform` / `b2Body_SetLinearVelocity` (box2d3-wasm then estimates the body's velocity, so debris receives correct impulses from a moving ship).
-3. `b2World_Step(worldId, dt, subStepCount)` — the world stays **resident** in JS; never rebuilt, never round-tripped through interop (ADR-002).
+2. Push it into its box2d3-wasm kinematic body via `b2Body_SetTransform` / `b2Body_SetLinearVelocity`.
+3. `b2World_Step(worldId, dt, subStepCount)` — the world stays **resident** in JS; never rebuilt, never round-tripped through interop.
 4. Read the resulting `b2BodyType.b2_dynamicBody` translations via `b2Body_GetPosition` and draw them.
 
-**Current status (ADR-005):** the asteroids scene runs box2d3-wasm debris as `b2BodyType.b2_dynamicBody` only (`spawnDebris` → `b2CreateBody` with `b2BodyType.b2_dynamicBody`, zero gravity, restitution 0.6, 1.8 s lifetime, removed via `b2DestroyBody` and world freed via `b2DestroyWorld` on cleanup). Kinematic mirroring of authoritative entities is **target work**, gated on the per-entity `PresentationPhysicsComponent { Mode }` routing (`Interpolate | Spring | box2d3-wasm | CustomGpu`). Default remains cheap lerp; pay the box2d3-wasm cost only for genuine visual dynamics (cape-ropes, ragdolls, debris).
+**Historical status (ADR-005):** the asteroids scene ran box2d3-wasm debris as `b2BodyType.b2_dynamicBody` only, with kinematic mirroring of authoritative entities marked target work. All of it was removed in the Babylon migration.
 
-## 4. Dual-Physics Isolation Matrix
+## 4. Interpolation Isolation Matrix
 
-| Parameter | Authoritative Layer (C# / Box2D.NET) | Presentation Layer (TS / PixiJS / box2d3-wasm) |
+| Parameter | Authoritative Layer (C# / BepuPhysics2) | Presentation Layer (TS / Babylon.js) |
 | --- | --- | --- |
-| Execution domain | Server-side static-SSR ASP.NET Core host (`Game.Web`) — **not** Blazor WASM | Browser main thread (Vite IIFE bundle) |
-| Clock / timestep | Fixed `Δt_sim` (60 Hz `EcsSimulation` / game sims) | Variable, V-Sync bounded (`PIXI.Ticker`) |
-| Physics role | Gameplay mechanics, hitboxes, mass, contact events (Asteroids) | Visual debris, particles, secondary motion only |
-| Body mapping | `b2BodyType` Dynamic/Static | `b2_kinematicBody` (mirrors C#) / `b2_dynamicBody` (local VFX) |
-| Collision resolution | Two-way (force ↔ force) | One-way (kinematic → dynamic) |
-| State output | Computes `S_n`, emits one batched signal per interval | Consumes `S_n`, buffers prev/curr, evaluates `(1−α)S_{n−1} + αS_n` |
+| Execution domain | browser-wasm host (`Game.Wasm`, Mono WASM) | Browser main thread (Vite ESM bundle) |
+| Clock / timestep | Fixed `Δt_sim` (60 Hz `EcsSimulation` / game sims) | Variable, V-Sync bounded (Babylon render loop) |
+| Physics role | Gameplay mechanics, hitboxes, mass, contact events (Asteroids) | None — rendering only |
+| Body mapping | `BodyHandle` ↔ Arch entity (`PhysicsBody` component) | Mesh pools / thin instances (target) |
+| State output | Computes `S_n`, writes one batched signal per interval into the pinned buffer | Consumes `S_n`, buffers prev/curr, evaluates `(1−α)S_{n−1} + αS_n` |
 | Interpolation | None | LERP translation, shortest-path angular LERP rotation |
 
-Determinism corollary (ADR-002): the authoritative world uses deterministic single-worker Box2D.NET; the box2d3-wasm JS build is **not** deterministic and does not need to be — presentation-only.
+Determinism corollary (ADR-002/011): the authoritative world uses deterministic single-threaded BepuPhysics2 (null `ThreadDispatcher`); no JS-side physics world exists.
 
-## 5. Future: `HEAPF32` shared memory (ADR-003 target)
+## 5. `HEAPF32` shared memory (implemented, ADR-008)
 
-When the SSE/JSON bridge evolves to pinned shared-memory transfer (`GCHandle.Alloc(..., Pinned)` / `Marshal.AllocHGlobal` → `IntPtr` → `new Float32Array(wasmHeap, ptr, entityCount * Stride)`), the buffer math is unchanged: `ingest` reads prev/curr straight from stride-indexed floats over a zero-copy view. Design the `InterpState` buffer so the snapshot *source* is swappable — never let JSON parsing leak into the interpolation loop itself.
+Pinned shared-memory transfer is implemented: `GCHandle.Alloc(..., Pinned)` → `IntPtr` → `new Float32Array(wasmHeap, ptr, entityCount * Stride)` via `[JSImport]("notifyRender")`. The buffer math is unchanged from the interpolation pattern: `ingest` reads prev/curr straight from stride-indexed floats over a zero-copy view. Design the `InterpState` buffer so the snapshot *source* is swappable — never let JSON parsing leak into the interpolation loop itself.
 
 ## 6. Review corrections applied to the source blueprint
 
@@ -147,14 +148,14 @@ When the SSE/JSON bridge evolves to pinned shared-memory transfer (`GCHandle.All
 3. Fixed 16.666 constant replaced with signal-borne `stepMs`/`tickMs`.
 4. "SLERP for rotation" corrected to shortest-path angular LERP (2D).
 5. "Execution Domain: Blazor WebAssembly (AOT)" corrected to the static-SSR server host (no Blazor WASM exists in this repo).
-6. box2d3-wasm kinematic coupling marked target work (ADR-005 `PresentationPhysicsComponent`); current box2d3-wasm usage is `b2BodyType.b2_dynamicBody` debris only. API usage verified against box2d3-wasm typings.
+6. box2d3-wasm kinematic coupling and the presentation-physics layer were removed in the Babylon migration (ADR-010/011) — see Section 3.
 
 ## 7. Post-rollout fixes (SnapshotBuffer era)
 
 Two defects found after the `SnapshotBuffer` rollout to all scenes:
 
-1. **Epoch-before-seq ordering (restart freeze).** `SnapshotBuffer.ingest` rejected `seq <= lastSeq` *before* checking the epoch. Every sim reset (`SnakeSimulation.Reset`, racer restart, etc.) bumps `_epoch` and zeroes `_seq`, so the new run's first signals (seq 1, 2, … ≤ the dead run's seq) were dropped as stale — the scene froze on the dead board until a page reload. Fix: on epoch change, clear entries and reset `lastSeq = -1` **before** the stale-seq rejection. Scenes additionally reset client-only state on epoch change (asteroids: explosion emitters, box2d3-wasm debris, ignition bookkeeping; racer: parallax offsets, `previousPosition`).
-2. **Idle full-redraw per ticker frame (FPS regression).** The rollout moved scenes from "draw once per SSE signal" to "draw every ticker frame". While a sim streams at 60 Hz that is inherent, but on start overlays, game-over screens and paused sims no signals arrive — yet every scene kept clearing and rebuilding its entire `Graphics` at display Hz on identical data. Fix: `SnapshotBuffer.advance(stepMs)` returns the render alpha, or `null` when nothing can have changed (no ingest since the last draw and α already settled at 1). Scenes early-out on `null`; presentation-only systems that genuinely need every frame (asteroids particle emitters, box2d3-wasm debris stepping) keep running unconditionally. Known trade-off: pacman's power-pellet pulse (a `performance.now()` sine drawn inside `draw`) freezes while the sim is idle.
+1. **Epoch-before-seq ordering (restart freeze).** `SnapshotBuffer.ingest` rejected `seq <= lastSeq` *before* checking the epoch. Every sim reset (`SnakeSimulation.Reset`, racer restart, etc.) bumps `_epoch` and zeroes `_seq`, so the new run's first signals (seq 1, 2, … ≤ the dead run's seq) were dropped as stale — the scene froze on the dead board until a page reload. Fix: on epoch change, clear entries and reset `lastSeq = -1` **before** the stale-seq rejection. Scenes additionally reset client-only state on epoch change (asteroids: explosion emitters, debris, ignition bookkeeping; racer: parallax offsets, `previousPosition`).
+2. **Idle full-redraw per ticker frame (FPS regression).** The rollout moved scenes from "draw once per signal" to "draw every ticker frame". While a sim streams at 60 Hz that is inherent, but on start overlays, game-over screens and paused sims no signals arrive — yet every scene kept clearing and rebuilding its entire display at display Hz on identical data. Fix: `SnapshotBuffer.advance(stepMs)` returns the render alpha, or `null` when nothing can have changed (no ingest since the last draw and α already settled at 1). Scenes early-out on `null`; presentation-only systems that genuinely need every frame keep running unconditionally. Known trade-off: pacman's power-pellet pulse (a `performance.now()` sine drawn inside `draw`) freezes while the sim is idle.
 
 Redraw-gate pattern for every scene:
 
