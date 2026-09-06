@@ -2,7 +2,8 @@ import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
-import { Vector3, Color3, Color4 } from '@babylonjs/core/Maths/math';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
@@ -18,6 +19,7 @@ declare global {
         renderText: (message: string) => void;
         renderScene: (message: string) => Promise<void>;
         registerLocalBufferProvider: (provider: LocalBufferProvider) => void;
+        __spector: unknown;
     }
 }
 
@@ -44,7 +46,7 @@ export async function initGame(containerId: string): Promise<void> {
         container.style.height = '100vh';
     }
 
-    // Babylon.js 8 — WebGL2 (WebGPU opt-in). The canvas is sized by Babylon and
+    // Babylon.js 9 — WebGL2 (WebGPU opt-in). The canvas is sized by Babylon and
     // appended into the host container; the simulation keeps ticking headless in
     // C# while the scene renders the shared-memory entity buffer (future game
     // renderers read the Float32Array bridge via signalSource.ts).
@@ -91,7 +93,29 @@ export async function initGame(containerId: string): Promise<void> {
     engine.runRenderLoop(() => scene?.render());
     window.addEventListener('resize', () => engine?.resize());
 
+    void initSpector(canvas);
+
     dbg('Babylon engine initialized:', engine.getClassName(), 'canvas', canvas.width, 'x', canvas.height);
+}
+
+/**
+ * On-demand Spector.js WebGL inspector (debug tooling for AI agent inspection).
+ * Activated only when `?spector=1` is present in the URL query string. The
+ * dynamic import is tree-shaken out of the default production bundle, loading
+ * as a separate chunk only when the flag is set.
+ */
+async function initSpector(_canvas: HTMLCanvasElement): Promise<void> {
+    if (!new URLSearchParams(location.search).has('spector')) return;
+    dbg('?spector=1 detected — booting Spector.js debug UI');
+    try {
+        const { Spector } = await import('spectorjs');
+        const spector = new Spector();
+        spector.displayUI();
+        window.__spector = spector;
+        dbg('Spector.js active');
+    } catch (err) {
+        console.error('[babylon-debug] Spector.js init failed:', err);
+    }
 }
 
 export function renderText(message: string): void {

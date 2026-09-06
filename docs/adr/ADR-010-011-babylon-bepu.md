@@ -10,11 +10,11 @@ The engine's presentation layer was PixiJS v8 (2D sprites, containers, filters, 
 ## Options Considered
 
 1. **Keep PixiJS, add 3D via a second renderer** — two display pipelines, duplicated interop, drift risk.
-2. **Babylon.js v8 (`@babylonjs/core`)** — WebGL2/WebGPU 3D engine, thin instances for batching, glTF support, camera/lighting built in; tree-shakeable ESM deep imports.
+2. **Babylon.js v9 (`@babylonjs/core`)** — WebGL2/WebGPU 3D engine, thin instances for batching, glTF support, camera/lighting built in; tree-shakeable ESM deep imports.
 
 ## Decision
 
-Babylon.js v8 replaces PixiJS as the single presentation frontend (ADR-010).
+Babylon.js v9 replaces PixiJS as the single presentation frontend (ADR-010).
 
 - All PixiJS packages (`pixi.js`, `@pixi/*`, `pixi-filters`, `pixi-viewport`, `@spd789562/particle-emitter`) and `box2d3-wasm` removed from `src/Game.UI/package.json`; `@babylonjs/core` added.
 - All 30 PixiJS scene files + the stats overlays deleted from `Frontend/`; `Frontend/game.ts` is now a Babylon bootstrap (Engine, Scene, ArcRotateCamera, hemispheric light, ground + demo mesh, render loop).

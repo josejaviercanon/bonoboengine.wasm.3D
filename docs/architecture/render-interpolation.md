@@ -4,7 +4,7 @@
 
 ## 1. Mathematical Foundation
 
-The authoritative C# simulation runs a fixed timestep `Δt_sim` (e.g., 16.66 ms for 60 Hz). The Babylon presentation runs at the display's variable rate (60/144/240 Hz). Mapping incoming snapshots directly onto meshes produces stepped motion whenever display Hz > sim Hz. The client therefore treats itself as a **delayed, state-buffering consumer** and evaluates each frame at a fractional progression `α` between the last two authoritative states:
+The authoritative C# simulation runs a fixed timestep `Δt_sim` (e.g., 16.66 ms for 60 Hz). The Babylon v9 presentation runs at the display's variable rate (60/144/240 Hz). Mapping incoming snapshots directly onto meshes produces stepped motion whenever display Hz > sim Hz. The client therefore treats itself as a **delayed, state-buffering consumer** and evaluates each frame at a fractional progression `α` between the last two authoritative states:
 
 ```
 α = (T_now − T_last_signal) / Δt_sim        (clamped to [0, 1] — no extrapolation)

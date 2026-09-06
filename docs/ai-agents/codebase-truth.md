@@ -17,13 +17,14 @@ Verified against the checked-in sources. When prose docs and these facts disagre
 - `CollidableReference.RawHandleValue` is the body-handle int; `BodyHandle.Value` likewise.
 - Note: `SpringSettings.Continuous` does NOT exist — use `new SpringSettings(frequency, dampingRatio)`.
 
-## Babylon.js v8 (`@babylonjs/core`, Game.UI package.json)
+## Babylon.js v9 (`@babylonjs/core`, Game.UI package.json)
 
-- Deep ESM imports only: `Engines/engine`, `scene`, `Cameras/arcRotateCamera`, `Lights/hemisphericLight`, `Maths/math`, `Meshes/Builders/boxBuilder`, `Meshes/Builders/groundBuilder`, `Materials/standardMaterial`.
+- Deep ESM imports only: `Engines/engine`, `scene`, `Cameras/arcRotateCamera`, `Lights/hemisphericLight`, `Maths/math.vector`, `Maths/math.color`, `Meshes/Builders/boxBuilder`, `Meshes/Builders/groundBuilder`, `Materials/standardMaterial`.
 - `scene.clearColor` is a `Color4` (not `Color3`).
-- `GridMaterial` is NOT in `@babylonjs/core` v8 — use `StandardMaterial` (grid material lives in the separate materials package).
+- `GridMaterial` is NOT in `@babylonjs/core` — use `StandardMaterial` (grid material lives in the separate materials package).
 - `ArcRotateCamera` has built-in pointer/wheel orbit-zoom control via `attachControl(canvas, true)`.
-- Babylon 8.56.2 currently installed.
+- Babylon 9.25.0 currently installed.
+- **Spector.js debug overlay:** append `?spector=1` to the URL. Spector.js loads on-demand via dynamic `import('spectorjs')` (tree-shaken from default prod bundle). After init, `window.__spector` exposes the `Spector` instance for AI agent inspection.
 
 ## Zero-copy bridge (unchanged by the 3D migration)
 

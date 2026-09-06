@@ -38,7 +38,7 @@ You should split your codebase into three distinct layers:
 1. **The Core Simulation Engine (Pure C#)** — a standard .NET Class Library. It knows absolutely nothing about graphics, rendering, or browsers.
    - *State Management:* manages coordinates, stats, pathfinding matrices, and entity maps.
    - *The Deterministic Tick:* runs the Arch ECS systems each fixed step (e.g., `MovementSystem`, `ColorSystem`) and emits one **batched** render signal (`EcsRenderSignal`) per interval — not one event per entity — so the presentation layer mirrors authoritative state without per-frame interop. A `ProcessCommand` command pattern is the planned input boundary (ADR-003).
-2. **The Presentation Layer (Babylon.js v8 + Tailwind)** — a pure mirror of your C# state.
+2. **The Presentation Layer (Babylon.js v9 + Tailwind)** — a pure mirror of your C# state.
    - *Tailwind UI:* DOM overlays for menus, inventories, and HUDs.
    - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array` over the WASM heap) and updates meshes/cameras per render frame — no per-entity interop calls.
 
@@ -59,7 +59,7 @@ The Authoritative C# Architecture above splits the **Presentation Bridge** into 
 C# AUTHORITATIVE WORLD          Arch ECS + BepuPhysics2 (3D rigid-body authority)
         │  fixed timestep → RenderSnapshot (Tick, Pos, Velocity) → pinned buffer
         ▼
-BABYLON.JS v8                   meshes, thin instances, camera, particles, GPU
+BABYLON.JS v9                   meshes, thin instances, camera, particles, GPU
 ```
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
@@ -224,7 +224,7 @@ The architectural stack uses specialized, lightweight libraries designed for max
 
 - **Game State Engine (Arch ECS):** a high-performance, ultra-lightweight C# Archetype Entity Component System. It avoids rigid class inheritance and allows you to process game world calculations (e.g., matching a parsed Town Entity to its structural Garrison Army Entities) inside structured, flat database-like chunks.
 - **AOT-Friendly Persistence Loop (.NET System.Text.Json Source Generators):** essential for saving/loading mechanics. Using `JsonSourceGenerationOptions` forces compilation to produce specialized metadata ahead-of-time (Native AOT-safe). This ensures fast, allocation-free serialization when passing structural map files, flat JSON configs, and delta-state frames across the .NET-to-JavaScript bridge.
-- **Canvas & Presentation Layer (Babylon.js v8):** a 3D WebGL2/WebGPU rendering engine (`@babylonjs/core`). Mesh pools, thin instances, cameras, lights, and PBR materials render the authoritative C# state; the zero-copy float32 bridge feeds transforms without per-entity interop.
+- **Canvas & Presentation Layer (Babylon.js v9):** a 3D WebGL2/WebGPU rendering engine (`@babylonjs/core`). Mesh pools, thin instances, cameras, lights, and PBR materials render the authoritative C# state; the zero-copy float32 bridge feeds transforms without per-entity interop.
 - **UI Layout & Theme Canvas (Tailwind CSS):** handles responsive HUDs, non-overlapping contextual menus, popups, inventory windows, and system options cleanly using standard HTML/CSS.
 
 ## Specialized MCP Servers & Knowledge Bases

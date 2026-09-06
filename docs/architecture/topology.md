@@ -1,13 +1,13 @@
-# Architecture Topology — C# ECS Engine in browser-wasm Native-AOT Host (Babylon.js v8)
+# Architecture Topology — C# ECS Engine in browser-wasm Native-AOT Host (Babylon.js v9)
 
 > Detailed companion to `docs/index.md` (the architecture source of truth). Decisions live in `docs/adr/`; verified facts in `docs/ai-agents/codebase-truth.md`. This file marks **Implemented** vs **Target** explicitly. When code and prose disagree, verified files win.
 
 ## The Dual-Runtime State Machine
 
-Integrating Babylon.js v8 into a C# browser-wasm Native-AOT host shifts execution into a hybrid dual-runtime:
+Integrating Babylon.js v9 into a C# browser-wasm Native-AOT host shifts execution into a hybrid dual-runtime:
 
 1. **C# WASM / Mono Runtime Layer** — pure game logic, ECS entity lifecycle, system updates, spatial partitioning, state machines, physics.
-2. **JS / WebGL2 / WebGPU Presentation Layer** — Babylon.js v8, hardware-accelerated 3D pipelines, audio contexts, skeletal mesh rendering.
+2. **JS / WebGL2 / WebGPU Presentation Layer** — Babylon.js v9, hardware-accelerated 3D pipelines, audio contexts, skeletal mesh rendering.
 3. **WebAssembly Memory Boundary** — the high-speed data link from C# component arrays to Babylon.js transform buffers.
 
 ```
@@ -20,7 +20,7 @@ C# Transform & Motion Systems (contiguous)   C# Physics Engine (BepuPhysics2, si
 =============== WASM Interop Boundary (memory HEAP) ===============
    |  batched render snapshot / matrix buffer
    v
-Babylon.js v8 Presentation Layer (WebGL2 / WebGPU pipelines)
+Babylon.js v9 Presentation Layer (WebGL2 / WebGPU pipelines)
    |-- meshes |-- thin instances |-- cameras |-- PBR |-- glTF 2.0 (target)
 ```
 
@@ -30,7 +30,7 @@ Babylon.js v8 Presentation Layer (WebGL2 / WebGPU pipelines)
 | --- | --- | --- |
 | **1. C# Authoritative World** | ECS + BepuPhysics2; gameplay physics, collisions, rules, deterministic tick. Sole authority. | Arch ECS implemented (`EcsSimulation` 60 Hz, `MovementSystem`/`ColorSystem`, batched `EcsRenderSignal`, SSR `Snapshot()`; games: Snake, Tetris, Breakout, Asteroids, Pacman, Racer). BepuPhysics2 **wired** into `Game.Engine` and used by `AsteroidsSimulation` as the authoritative physics world (sphere bodies, sub-stepped solves, contact filtering via `CollidableProperty<int>` matrix, begin-touch accumulation in `INarrowPhaseCallbacks`, screen wrap, deterministic single-threaded `Timestep` with null `ThreadDispatcher`). |
 | **2. Presentation World** | Client-side interpolation between authoritative snapshots (default). Pure mirror of authoritative state. | Interpolation math implemented in the shared-buffer decoders (`SnapshotBuffer`); per-game Babylon renderers that consume the buffers are **Target**. |
-| **3. Babylon.js v8** | Meshes, thin instances, cameras, lights, materials, particles, GPU render. | Bootstrap implemented (`initGame`/`renderScene` in `Frontend/game.ts`: ArcRotateCamera, hemispheric light, ground + demo mesh, render loop). Per-game 3D renderers are Target. |
+| **3. Babylon.js v9** | Meshes, thin instances, cameras, lights, materials, particles, GPU render. | Bootstrap implemented (`initGame`/`renderScene` in `Frontend/game.ts`: ArcRotateCamera, hemispheric light, ground + demo mesh, render loop). Per-game 3D renderers are Target. |
 
 Rule: never move simulation back-and-forth through JS interop every frame. The simulation writes batched snapshots into shared memory; Babylon reads them at render-frame rate. Client-side interpolation implementation guide: `docs/architecture/render-interpolation.md`.
 
@@ -61,7 +61,7 @@ Every sprite-state record struct carries the marker: `SpriteState` (stride 6), `
 ```
 C# ECS + BepuPhysics2 (authoritative) -> snapshots -> shared-memory bridge
    |-- client interpolation (cheap / default)
-   \-- Babylon.js v8 renderer (target)
+   \-- Babylon.js v9 renderer (target)
 ```
 
 - **BepuPhysics2** = authoritative gameplay physics in the C# ECS loop (vendored at `src/bepuphysics2`, ADR-011). Deterministic single-threaded solves (null `ThreadDispatcher`); no JS-side physics world.
@@ -104,7 +104,7 @@ Animation state machine belongs to the ECS, not glTF. See `docs/2d-skeletal-anim
 
 | Component | Runtime | State source of truth | Interop | Role |
 | --- | --- | --- | --- | --- |
-| Babylon.js core (`@babylonjs/core` v8) | JS (WebGL2/WebGPU) | JS scene graph | shared memory buffer (implemented, ADR-008) | View layer; consumes transform buffers |
+| Babylon.js core (`@babylonjs/core` v9) | JS (WebGL2/WebGPU) | JS scene graph | shared memory buffer (implemented, ADR-008) | View layer; consumes transform buffers |
 | Babylon thin instances (`thinInstanceSetBuffer`) | JS (GPU) | C# transform array | shared memory buffer (target) | large entity counts, single draw call |
 | Babylon cameras (ArcRotate etc.) | JS | C# camera entity (target) | shared buffer (target) | C# `CameraSystem` focus -> JS camera |
 | glTF 2.0 / `.glb` | JS (GPU skinning, target) | C# skeleton comps (target) | event-driven | animation triggers from C#; skinning on GPU |
@@ -113,7 +113,7 @@ Animation state machine belongs to the ECS, not glTF. See `docs/2d-skeletal-anim
 
 ## Ecosystem Packages
 
-The Babylon.js v8 stack is declared in `src/Game.UI/package.json`: `@babylonjs/core` (tree-shaken deep imports). **PixiJS, @pixi/*, box2d3-wasm and the PixiJS example scenes were removed** (ADR-010). Vendored C# `src/bepuphysics2` (BepuPhysics + BepuUtilities, net10.0) is **referenced** by `Game.Engine.csproj` and used by `AsteroidsSimulation`; `src/BrainAI` (pathfinding/AI) remains unreferenced.
+The Babylon.js v9 stack is declared in `src/Game.UI/package.json`: `@babylonjs/core` (tree-shaken deep imports). **PixiJS, @pixi/*, box2d3-wasm and the PixiJS example scenes were removed** (ADR-010). Vendored C# `src/bepuphysics2` (BepuPhysics + BepuUtilities, net10.0) is **referenced** by `Game.Engine.csproj` and used by `AsteroidsSimulation`; `src/BrainAI` (pathfinding/AI) remains unreferenced.
 
 ## Implementation Status
 

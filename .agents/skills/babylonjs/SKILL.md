@@ -168,6 +168,22 @@ For topics not covered in the reference files, fetch from the live docs:
 * Flow Graph: `/features/featuresDeepDive/flowGraph`
 * Smart Filters: `/features/featuresDeepDive/smartFilters`
 
+## Spector.js — WebGL Frame Inspector
+
+Spector.js captures and inspects individual WebGL frames (draw calls, shaders, textures, buffers). Useful for AI agents debugging GPU rendering from the browser.
+
+**On-demand activation (this repo):** append `?spector=1` to the URL. The bundle lazy-loads `spectorjs` via dynamic `import()` and exposes `window.__spector` after init. Tree-shaken from default production builds.
+
+```typescript
+// Manual activation in dev (for standalone Babylon apps):
+import { Spector } from 'spectorjs';
+const spector = new Spector();
+spector.displayUI();
+
+// Programmatic capture:
+spector.startCapture(canvas, 30);
+```
+
 ## Common Gotchas
 
 1. **Clustered Lights Scene Addition:** When creating lights for a `ClusteredLightContainer`, you *must* pass `true` as the `dontAddToScene` parameter in the light constructor. Failing to do this drastically reduces performance.

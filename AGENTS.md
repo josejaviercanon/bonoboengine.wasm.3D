@@ -12,7 +12,7 @@
 * **Framework:** .NET MAUI / WASM Native AOT
 * **ECS Backend:** Arch ECS (Pure C# zero-allocation component architecture)
 * **Physics Backend:** `BepuPhysics2` (Authoritative 3D simulation loop, deterministic single-threaded on the browser-wasm host)
-* **Render Frontend:** Babylon.js v8 (3D WebGL2/WebGPU canvas renderer)
+* **Render Frontend:** Babylon.js v9 (3D WebGL2/WebGPU canvas renderer)
 * **UI Overlay:** Tailwind CSS + Vite + TypeScript
 * **Target Environment:** Native AOT / WebAssembly (WASM)
 
@@ -37,7 +37,7 @@
 
 ### BABYLON_MESH_TRANSFORM_ALIGNMENT
 
-* **Description:** Babylon.js v8 entity rendering must be driven by batched transform signals or shared-memory float arrays rather than per-entity JavaScript interop calls.
+* **Description:** Babylon.js v9 entity rendering must be driven by batched transform signals or shared-memory float arrays rather than per-entity JavaScript interop calls.
 * **Enforcement:** Ensure C# 3D transform structures (`X`, `Y`, `Z`, rotation quaternion, `ScaleX/Y/Z`) align with Babylon mesh expectations. Update mesh positions/rotations in batch loops synchronized with render frames. Use `Mesh.instantiate` / thin instances (`thinInstanceSetBuffer`) for large entity counts (see `.agents/skills/babylonjs`).
 
 ### FLOAT32_LAYOUT_SYNC
@@ -59,7 +59,7 @@
 
 ## WebAssembly Architecture Rule: Hybrid Web UI and C# Core Engine
 
-This architectural specification defines the separation of concerns, interop patterns, and execution lifecycles for a high-performance 3D C# WebAssembly game engine utilizing **Babylon.js v8**, **Arch ECS**, **BepuPhysics2**, and a **TypeScript / Tailwind CSS DOM overlay**.
+This architectural specification defines the separation of concerns, interop patterns, and execution lifecycles for a high-performance 3D C# WebAssembly game engine utilizing **Babylon.js v9**, **Arch ECS**, **BepuPhysics2**, and a **TypeScript / Tailwind CSS DOM overlay**.
 
 ---
 
@@ -72,7 +72,7 @@ The engine separates performance-critical simulation logic from presentation and
 * Writes transformation state directly into pinned unmanaged memory buffers or batched render signals.
 * Acts as the single authoritative source of truth for all gameplay logic.
 
-* **The Presentation and UI Domain (TypeScript / Babylon.js v8 / Tailwind CSS):**
+* **The Presentation and UI Domain (TypeScript / Babylon.js v9 / Tailwind CSS):**
 * Executes inside the browser JavaScript runtime.
 * Reads transformation matrices and coordinates from the shared WASM heap to update Babylon meshes, cameras, and scene graph.
 * Renders HTML/CSS user interface overlays (inventories, health bars, HUDs) above the canvas using Tailwind CSS.
@@ -126,7 +126,7 @@ public static void MainLoopTick(float deltaTime)
 | Architectural Layer | Implementation Technology | Primary Responsibility | Execution Frequency |
 | --- | --- | --- | --- |
 | **Simulation & Physics** | C# (Arch ECS / BepuPhysics2 / .NET WASM) | Game rules, entity states, 3D rigid body collisions and dynamics. | Locked to target tick rate (e.g., 60 Hz fixed timestep). |
-| **Graphics Pipeline** | TypeScript (Babylon.js v8 / WebGL2 / WebGPU) | Mesh rendering, scene graph, cameras, particles. | Frame-synchronized with browser `requestAnimationFrame`. |
+| **Graphics Pipeline** | TypeScript (Babylon.js v9 / WebGL2 / WebGPU) | Mesh rendering, scene graph, cameras, particles. | Frame-synchronized with browser `requestAnimationFrame`. |
 | **Complex UI Layer** | Tailwind CSS / Vite / TypeScript | Menus, HUDs, inventory grids, configuration panels. | Event-driven (DOM-rendered on demand). |
 | **Shared Memory Bridge** | Pinned `GCHandle` & `Float32Array` view | Zero-copy 3D transform and coordinate synchronization. | Direct memory read per render frame. |
 
@@ -144,11 +144,12 @@ public static void MainLoopTick(float deltaTime)
 - `src/Game.Examples` is the example catalog (`ExamplesCatalog.cs` — games only since the PixiJS example catalogue was removed) and `IExampleSims` seam. Referenced by `Game.Wasm`.
 
 - `src/bepuphysics2` is a **vendored** C# physics library (BepuPhysics2, Apache-2.0), **referenced** by `Game.Engine.csproj` as the authoritative physics world (ADR-002/011): `BepuPhysics` + `BepuUtilities` (net10.0, `CommonSettings.props`). Deterministic single-threaded solves (null `ThreadDispatcher`). `src/BrainAI` (pathfinding/AI) remains vendored but **unreferenced** — treat as a target dependency, not active. `src/Temp/` holds upstream samples/demos — not part of the build/solution.
-- The Babylon.js v8 ecosystem (`@babylonjs/core`) is declared in `src/Game.UI/package.json`. **PixiJS, @pixi/*, box2d3-wasm and the PixiJS example scenes were removed** in the Babylon migration (ADR-010).
+- The Babylon.js v9 ecosystem (`@babylonjs/core`) is declared in `src/Game.UI/package.json`. **PixiJS, @pixi/*, box2d3-wasm and the PixiJS example scenes were removed** in the Babylon migration (ADR-010).
 
 ## Agent References
 
-- `.agents/skills/babylonjs/` — vendored Babylon.js 8 skill (API patterns, procedural modeling, thin instances, PBR). Consult it when writing or verifying any Babylon code; prefer its API facts over memory or generic web knowledge.
+- `.agents/skills/babylonjs/` — vendored Babylon.js 9 skill (API patterns, procedural modeling, thin instances, PBR). Consult it when writing or verifying any Babylon code; prefer its API facts over memory or generic web knowledge.
+- `?spector=1` URL param activates Spector.js WebGL debug overlay (on-demand dynamic import, tree-shaken from default prod bundle): `window.__spector` exposed after init.
 - `docs/babylonjs/` — Babylon.js documentation subset (core concepts, meshes, materials, animation, performance).
 - `docs/bepuphysics2/` — BepuPhysics2 documentation subset (Getting Started, determinism, substepping, stability, performance).
 - `net-microsoft-documentation` MCP server — official, up-to-date Microsoft Learn docs for .NET, ASP.NET Core, Blazor, and MAUI. Use it for framework/API verification.
@@ -177,7 +178,7 @@ Summary of the scope an agent can search using this server:
 | **Transport Layer (`fetch` POST / SSE Streams)** | **Superseded** | The legacy SSE stream (`/api/ecs/stream` pushing JSON `SpriteState[]`) and HTTP POST render bridges are deprecated for rendering. They are replaced by direct, zero-copy `Float32Array` views over the WASM memory heap. |
 | **Single-Player Local Default** | **Valid** | Local-buffer builds remain the default (`SINGLE_PLAYER_LOCAL`), avoiding unnecessary network abstraction layers during single-player execution. |
 | **Temporal Context & Snapshots** | **Upgraded** | Instead of serializing temporal JSON snapshots over network bridges, hot-path coordinate, rotation, and scale data stream continuously via pinned unmanaged memory pointers (`GCHandle.Alloc` + WebAssembly heap mapping). |
-| **Presentation Split (Babylon.js v8)** | **Valid** | Babylon.js v8 remains strictly responsible for rendering, mesh pools, camera control, and interpolation, reading directly from the shared memory buffer without per-entity interop polling. |
+| **Presentation Split (Babylon.js v9)** | **Valid** | Babylon.js v9 remains strictly responsible for rendering, mesh pools, camera control, and interpolation, reading directly from the shared memory buffer without per-entity interop polling. |
 
 ---
 
