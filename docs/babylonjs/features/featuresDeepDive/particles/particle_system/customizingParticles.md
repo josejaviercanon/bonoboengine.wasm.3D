@@ -1,0 +1,285 @@
+---
+title: Customizing Particles
+image:
+description: Learn how to customize particles in Babylon.js.
+keywords: diving deeper, particles, particle system, customization, particle customization
+further-reading:
+video-overview:
+video-content:
+---
+
+## How To Customize Particles
+
+Beyond the many built-in properties for controlling particle behavior, Babylon.js allows further customization through **Custom Functions** and **Custom Effects**.
+
+## Custom Functions
+
+There are three methods you can customize:
+
+- `startDirectionFunction`: specifies the direction for each new particle;
+- `startPositionFunction`: specifies the start position for each new particle;
+- `updateFunction`: provides an update to each particle on each frame and can affect position, color, age, size, etc. Try to keep it simple and fast.
+
+You can directly attach all these functions to the `particleSystem`.
+
+Since Babylon.js v3.2, you can use `startDirectionFunction` and `startPositionFunction` when creating a new particle emitter type, as is done with the [box, sphere, and cone emitters](/features/featuresDeepDive/particles/particle_system/shape_emitters).
+
+### Direct
+
+The start direction function has the default form:
+
+```javascript
+particleSystem.startDirectionFunction = (worldMatrix: Matrix, directionToUpdate: Vector3, particle: Particle, isLocal: boolean) {
+    var randX = randomNumber(this.direction1.x, this.direction2.x);
+    var randY = randomNumber(this.direction1.y, this.direction2.y);
+    var randZ = randomNumber(this.direction1.z, this.direction2.z);
+
+    Vector3.TransformNormalFromFloatsToRef(randX, randY, randZ, worldMatrix, directionToUpdate);
+}
+```
+
+The start position function has the default form:
+
+```javascript
+particleSystem.startPositionFunction = (worldMatrix: Matrix, positionToUpdate: Vector3, particle: Particle, isLocal: boolean): void => {
+  var randX = randomNumber(this.minEmitBox.x, this.maxEmitBox.x);
+  var randY = randomNumber(this.minEmitBox.y, this.maxEmitBox.y);
+  var randZ = randomNumber(this.minEmitBox.z, this.maxEmitBox.z);
+
+  Vector3.TransformCoordinatesFromFloatsToRef(randX, randY, randZ, worldMatrix, positionToUpdate);
+};
+```
+
+Assigning `updateFunction` replaces Babylon.js's built-in particle update, so your function is responsible for advancing particle age, recycling particles, and applying any movement or color changes you still want. Use public properties and methods in custom update functions; properties starting with `_` are internal and can change between releases.
+
+A custom update function can take this form:
+
+```javascript
+var scaledColorStep = new BABYLON.Color4(0, 0, 0, 0);
+var scaledDirection = BABYLON.Vector3.Zero();
+var scaledGravity = BABYLON.Vector3.Zero();
+
+particleSystem.updateFunction = function (particles) {
+  var scene = this.getScene();
+  var delta = this.updateSpeed * (scene ? scene.getAnimationRatio() : 1);
+
+  for (let index = 0; index < particles.length; index++) {
+    var particle = particles[index];
+    particle.age += delta;
+
+    if (particle.age >= particle.lifeTime) {
+      this.recycleParticle(particle);
+      index--;
+      continue;
+    }
+
+    particle.colorStep.scaleToRef(delta, scaledColorStep);
+    particle.color.addInPlace(scaledColorStep);
+
+    if (particle.color.a < 0) {
+      particle.color.a = 0;
+    }
+
+    particle.angle += particle.angularSpeed * delta;
+
+    particle.direction.scaleToRef(delta, scaledDirection);
+    particle.position.addInPlace(scaledDirection);
+
+    this.gravity.scaleToRef(delta, scaledGravity);
+    particle.direction.addInPlace(scaledGravity);
+  }
+};
+```
+
+Two simple examples of customizing the update function:
+
+### Randomize the Particle's Color per Frame
+
+Add the following line after the recycle check:
+
+```javascript
+particle.color = new BABYLON.Color4(Math.random(), Math.random(), Math.random(), 1);
+```
+
+<Playground id="#MRRGXL#956" image="/img/playgroundsAndNMEs/pg-MRRGXL-950.webp" title="Random Colored Particles" description="Simple example of creating random colored particles."/>
+
+### Grow Particles from Size 0 to a Final Size
+
+This is a little trickier, since the particles start from size 0 — both `minSize` and `maxSize` must be set to 0, and a new property is added to store the final size.
+
+Add in the main body of code:
+
+```javascript
+particleSystem.minSize = 0;
+particleSystem.maxSize = 0;
+
+particleSystem.finalSize = 1;
+```
+
+After the recycle check, to grow the particle to its final size by 35% of its lifetime, add:
+
+```javascript
+if (particle.age < particle.lifeTime * 0.35) {
+  particle.size = (particleSystem.finalSize * particle.age) / (particle.lifeTime * 0.35);
+}
+```
+
+<Playground id="#WJBZQH#109" image="/img/playgroundsAndNMEs/pg-WJBZQH-104.webp" title="Growing Particles" description="Simple example of creating growing particles."/>
+
+### Particle Emitter Type
+
+Starting from Babylon.js v3.2, you can create a new object of type `IParticleEmitterType` for the particle system. [Examples](/features/featuresDeepDive/particles/particle_system/shape_emitters) of this type include `SphereParticleEmitter` and `ConeParticleEmitter`, which are produced by `createSphereEmitter` and `createConeEmitter`.
+
+These objects are assigned to the `particleEmitterType` property of the particle system.
+
+You use `startDirectionFunction` and `startPositionFunction` as methods on objects of this type to determine the region of space that the particles are emitted from and their direction of travel.
+
+You can create your own particle emitter type by implementing `IParticleEmitterType` and assigning it to `particleEmitterType`, overriding the default `startDirectionFunction` and `startPositionFunction` methods.
+
+Below is an example that creates a new spray emitter, which sends streams of particles out of the top, bottom, and sides of a cylindrical region.
+
+#### Create Spray Emitter
+
+To determine where a particle is emitted from, the cylinder is divided into two regions, as shown in the diagram below.
+
+![cylinder emitter](/img/how_to/particles/cyl_particles.webp)
+
+Any particle with a start position inside the red region is emitted in the direction from the center to the particle. Any particle with a start position inside the blue region is emitted horizontally.
+
+The `createSprayEmitter` method sets the radius and height of the cylinder and creates a new `SprayParticleEmitter` object, which is assigned to the `particleEmitterType` property.
+
+```javascript
+BABYLON.ParticleSystem.prototype.createSprayEmitter = function (radius, height) {
+  if (radius === void 0) {
+    radius = 0.5;
+  }
+  if (height === void 0) {
+    height = 1;
+  }
+  var particleEmitter = new BABYLON.SprayParticleEmitter(radius, height);
+  this.particleEmitterType = particleEmitter;
+  return particleEmitter;
+};
+```
+
+The `SprayParticleEmitter` class implements two methods — `startDirectionFunction` and `startPositionFunction` — and Babylon.js takes care of the rest.
+
+```javascript
+var SprayParticleEmitter = (function () {
+  function SprayParticleEmitter(radius, height, directionRandomizer) {
+    if (radius === void 0) {
+      radius = 0.5;
+    }
+    if (height === void 0) {
+      height = 1;
+    }
+    if (directionRandomizer === void 0) {
+      directionRandomizer = 0;
+    }
+    this.height = height;
+    this.directionRandomizer = directionRandomizer;
+    this.radius = radius;
+  }
+
+  SprayParticleEmitter.prototype.startDirectionFunction = function (worldMatrix, directionToUpdate, particle) {
+    var direction = particle.position.subtract(worldMatrix.getTranslation()).normalize();
+    var randX = BABYLON.Scalar.RandomRange(0, this.directionRandomizer);
+    var randY = BABYLON.Scalar.RandomRange(0, this.directionRandomizer);
+    var randZ = BABYLON.Scalar.RandomRange(0, this.directionRandomizer);
+    if (direction.x * direction.x + direction.z * direction.z > 0.1 * this.radius && Math.abs(direction.y) > (0.1 * this.height) / 2) {
+      direction.x += randX;
+      direction.y = randY;
+      direction.z += randZ;
+    } else {
+      direction.x += randX;
+      direction.y += randY;
+      direction.z += randZ;
+    }
+    direction.normalize();
+    BABYLON.Vector3.TransformNormalFromFloatsToRef(direction.x, direction.y, direction.z, worldMatrix, directionToUpdate);
+  };
+
+  SprayParticleEmitter.prototype.startPositionFunction = function (worldMatrix, positionToUpdate, particle) {
+    var s = BABYLON.Scalar.RandomRange(0, Math.PI * 2);
+    var h = BABYLON.Scalar.RandomRange(-0.5, 0.5);
+    var radius = BABYLON.Scalar.RandomRange(0, this.radius);
+    var randX = radius * Math.sin(s);
+    var randZ = radius * Math.cos(s);
+    var randY = h * this.height;
+    BABYLON.Vector3.TransformCoordinatesFromFloatsToRef(randX, randY, randZ, worldMatrix, positionToUpdate);
+  };
+  return SprayParticleEmitter;
+})();
+BABYLON.SprayParticleEmitter = SprayParticleEmitter;
+```
+
+<Playground id="#V07WF8#10" title="Custom Spray Emitter Showing Container" description="Simple example of a custom spray emitter showing container."/>
+<Playground id="#V07WF8#11" title="Custom Spray Emitter Without Container" description="Simple example of a custom spray emitter without container."/>
+
+## Custom Effects
+
+A custom effect is achieved via a fourth parameter when creating a new particle system:
+
+```javascript
+var particleSystem = new BABYLON.ParticleSystem("particles", 2000, scene, customEffect);
+```
+
+`customEffect` is a `BABYLON.Effect` that targets a valid shader program and is created with the `createEffectForParticles` method on the `engine` object.
+
+This method takes three parameters:
+
+```javascript
+var customEffect = engine.createEffectForParticles(fragment, uniforms, samplers);
+```
+
+- fragment: string — the name of the fragment shader, which can be in the [shaders store](/features/featuresDeepDive/materials/advanced/custom_procedural_textures#using-a-shaderstore-for-shader-storage) or the [id of a DOM element](/features/featuresDeepDive/materials/shaders/shaderCodeInBjs#shader-code-in-script-tags)
+- uniforms: [strings] — array of additional uniforms used in the shader
+- samplers: [strings] — array of names of samplers for additional textures
+
+### Fragment Shader Assignment
+
+When assigning a fragment shader to the shader store, the name should have `FragmentShader` appended to it. For example, creating a custom effect with the fragment name `myParticle` requires a `myParticleFragmentShader` entry in the shader store:
+
+```javascript
+BABYLON.Effect.ShadersStore["myParticleFragmentShader"] = [...]
+```
+
+```javascript
+var customEffect = engine.createEffectForParticles("myParticle", [...]);
+```
+
+### Uniforms Assignment
+
+By default, Babylon.js provides `vUV` and `vColor` varying parameters and also passes the particle texture.
+
+You can add further uniform variables. For example, to pass a uniform variable such as `time`, include it in the uniforms array:
+
+```javascript
+var customEffect = engine.createEffectForParticles("myParticle", [time]);
+```
+
+Then pass it using `setFloat` with an `onBind` callback for `customEffect`:
+
+```javascript
+var time = 0;
+var order = 0.1;
+
+customEffect.onBind = function () {
+  customEffect.setFloat("time", time);
+
+  time += order;
+
+  if (time > 100 || time < 0) {
+    order *= -1;
+  }
+};
+```
+
+You can see an example of the above in this playground:  
+<Playground id="#1ASENS#43" title="Custom Effect Using Shader Store" description="Simple example of a custom effect using the shader store."/>  
+You can see a similar example with node-based particles:
+<Playground id="#0K3AQ2#3943" title="Custom Effect Using Shader Store With NPE" description="Simple example of a custom effect using the shader store with NPE."/>
+
+### Particle Effect Object
+
+The particle effect object is a slightly modified [Babylon Effect Object](/typedoc/classes/babylon.effect). Also note that the `ShadersStore` is a namespace on this special effect object.

@@ -1,0 +1,41 @@
+---
+title: Virtual Joysticks
+image:
+description: Learn about virtual gamepad input support in Babylon.js.
+keywords: diving deeper, input, gamepad, controller, virtual gamepad
+further-reading:
+video-overview:
+video-content:
+---
+
+## VirtualJoystick
+
+Create virtual joysticks for the left and right sides of the screen.
+
+```javascript
+const leftJoystick = new BABYLON.VirtualJoystick(true);
+const rightJoystick = new BABYLON.VirtualJoystick(false);
+```
+
+Get the joystick value.
+
+```javascript
+leftJoystick.deltaPosition.x;
+leftJoystick.deltaPosition.y;
+```
+
+<Playground id="#PRQU53#7" title="VirtualJoystick Example" description="Simple example showing how to add a VirtualJoystick to your scene." image="/img/playgroundsAndNMEs/divingDeeperVirtualJoystick1.webp"/>
+
+Note: This will create an overlay canvas on top of the scene canvas. This disables interaction with Babylon GUI elements and scene pointer events. To avoid this, the overlay joystick canvas's z-index can be modified to toggle between scene interaction and joystick input, as shown in the playground above. Another option is to create a custom joystick using Babylon GUI, as described below.
+
+## Custom joystick
+
+To create a custom virtual joystick and modify it to suit specific use cases, the Babylon GUI can be used.
+
+<Playground id="#C6V6UY#5" title="Custom Joystick Example" description="Simple example showing how to add a Custom Joystick to your scene." image="/img/playgroundsAndNMEs/divingDeeperVirtualJoystick2.webp"/>
+
+As seen in this example, no overlay canvas is used, so other GUI elements will continue to function and the visuals can be modified/positioned if needed.
+
+You can also create custom input for a camera. For example, here is a combined input suitable for FPS games, with a movement joystick on the left and a swipe-rotation area on the right:
+
+<Playground id="#MQ9B0X#3" title="Custom Joystick Input Example" description="Simple example showing how to add a Custom Joystick Input to your camera." image="/img/playgroundsAndNMEs/divingDeeperVirtualJoystick2.webp"/>

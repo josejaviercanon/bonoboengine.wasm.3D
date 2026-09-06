@@ -1,0 +1,66 @@
+---
+title: Inspector V2
+image:
+description: Learn all about the incredibly powerful debug layer called "The Inspector" in Babylon.js.
+keywords: babylon.js, tools, resources, inspector, debug layer
+further-reading:
+    - title: Inspector V1
+      url: /legacy/inspector
+video-overview:
+video-content:
+---
+
+The Babylon.js Inspector is a diagnostic tool that makes it possible to inspect and manipulate a scene in real time. This fundamentally includes a hierarchical view of the scene and the properties of individual entities within it (such as nodes, meshes, and materials), as well as many additional features detailed later in this documentation.
+
+The Inspector is included in Babylon.js tools such as [Playground](/toolsAndResources/thePlayground) and [Sandbox](/toolsAndResources/sandbox), and can be toggled on or off with buttons in their toolbars.
+
+The Inspector is also available as an API for use in your own projects.
+
+If you are using the Babylon ESM packages (e.g. `@babylonjs/core`), then use the [@babylonjs/inspector](https://www.npmjs.com/package/@babylonjs/inspector) ESM package (version 8.49.0+ is Inspector V2).
+
+If you are using the Babylon UMD packages (e.g. `babylonjs`), then use the [babylonjs-inspector](https://www.npmjs.com/package/babylonjs-inspector) UMD package (version 8.49.0+ is Inspector V2).
+
+<Alert severity="warning">
+Inspector extensibility is limited when using the UMD package. This is because the UMD bundle is intended to work directly in the browser, which means it bundles all its dependencies (React, Fluent, etc.) and does not currently re-export them. This makes it hard to create an extension that is a React component, for example.
+</Alert>
+
+The following is a basic example showing how to attach the Inspector to a Babylon scene.
+
+<CodeSandbox id="msdvk8" title="Inspector V2 - Intro" height="600px" />
+
+## Extensibility
+
+Inspector V2 is highly extensible. When using the API, you can easily add new features that are unique to your Babylon project. Additionally, the Inspector supports dynamically installed extensions that are scenario-specific. This helps keep the core Inspector small and prevents the UI from becoming overwhelming. You can think of this like Visual Studio Code, where you install only the extensions that add optional features for the scenarios that matter to you. You can learn more in the [Extensibility API](/toolsAndResources/inspectorv2/extensibilityAPI) and [Examples](/toolsAndResources/inspectorv2/examples) sections.
+
+## Backward Compatibility
+
+Inspector V2 aims to be backward compatible with Inspector V1 and to have feature parity with Inspector V1, except in a few cases where APIs or features are mostly unused in Inspector V1. This also means that much of the [Inspector V1 documentation](/legacy/inspector) is still valid and useful, though for screenshots and videos you may need to map older UX to newer UX.
+
+### Migrating from V1 to V2
+
+The V1 APIs (`Inspector.Show`, `scene.debugLayer.show`, etc.) continue to work in V2 through a built-in compatibility layer that automatically converts V1 options to their V2 equivalents. This means existing code should work without changes. Internally, this is done via the `ConvertOptions` function, which can also be called directly if you want to incrementally migrate from V1 to V2 options.
+
+The following V1 options are automatically mapped:
+
+| V1 Option                        | V2 Equivalent                                                               |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `overlay`                        | `layoutMode: "overlay"` (when `true`) or `"inline"` (when `false`)          |
+| `handleResize`                   | `autoResizeEngine`                                                          |
+| `globalRoot`                     | `containerElement`                                                          |
+| `initialTab`                     | A service definition that selects the corresponding pane                    |
+| `showExplorer` / `showInspector` | A `sidePaneRemapper` that filters out the corresponding pane                |
+| `embedMode`                      | A `sidePaneRemapper` that adjusts pane positions                            |
+| `gizmoCamera`                    | A service definition that registers the camera with the gizmo utility layer |
+| `additionalNodes`                | A service definition that adds sections to Scene Explorer                   |
+| `explorerExtensibility`          | A service definition that adds entity commands to Scene Explorer            |
+| `contextMenu`                    | A service definition that adds section commands to Scene Explorer           |
+
+For new code, use the V2 API (`ShowInspector`) directly, which returns an `InspectorToken` for controlling Inspector visibility. See the [Extensibility API](/toolsAndResources/inspectorv2/extensibilityAPI) for details.
+
+## Inspector in Playground
+
+As mentioned, the Inspector is already included as a feature of [Playground](/toolsAndResources/thePlayground). However, you can also use the Inspector V2 API directly in the Playground if you want programmatic control of the Inspector, want to experiment with the Inspector API, or want to extend the Inspector's functionality for one specific Playground.
+
+Here is a simple example showing how to use Inspector programmatically in a Playground:
+
+<Playground id="#6RBWKC" title="Inspector V2" description="Example of calling the API for showing Inspector V2"/>

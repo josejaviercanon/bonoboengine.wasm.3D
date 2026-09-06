@@ -1,0 +1,91 @@
+---
+title: The Meshes Library
+image: 
+description: Learn about the free available meshes in the Babylon.js meshes library.
+keywords: babylon.js, tools, resources, assets, library, meshes
+further-reading:
+    - title: Load from any file type - glTF, OBJ, STL, etc.
+      url: /features/featuresDeepDive/importers/loadingFileTypes
+    - title: Textures Available in the Playground
+      url: /toolsAndResources/assetLibraries/availableTextures
+    - title: Using External Assets in the Playground
+      url: /toolsAndResources/thePlayground/externalPGAssets
+video-overview:
+video-content:
+---
+
+
+## Available Meshes for Importing into Playground
+
+All the Playground examples are loaded using the default environment and default camera methods. The meshes are different sizes, and using the default methods places the camera at a distance where the whole image can be seen clearly. To find [values for other cameras](/toolsAndResources/assetLibraries/availableMeshes#finding-camera-values), you can use the Playground scene inspector.
+
+Meshes with a large file size can take some time to load, so please be patient.
+
+Some meshes appear in both file locations.
+
+## From the Playground Scenes Folder
+
+These files are in the GitHub repo [scenes folder](https://github.com/BabylonJS/Babylon.js/tree/master/packages/tools/playground/public/scenes) for the Playground and are available for use.
+
+When using a `scene` method to append or import scenes or meshes, the `rootUrl` parameter has the form `scenes/` or `scenes/folder/`, and the `filename` parameter is as given below. The Playground will show the actual terms required.
+
+
+Filename | Size | Image | Playground
+---|---|---|---|
+Alien.gltf | 15.1 MB | ![alien](/img/resources/meshes/alien.webp) | <Playground id="#8IMNBM#1" title="Alien" description=""/>
+BrainStem.gltf | 3.19 MB | ![brainstem](/img/resources/meshes/brainstem.webp) | <Playground id="#J62R3F#1" title="Brainstem" description=""/>
+BoomBox.glb | 10.7 MB | ![boombox](/img/resources/meshes/boombox.webp) | <Playground id="#QCU8DJ#2" title="Boombox" description=""/>
+Buggy.gltf | 1.09 MB | ![buggy](/img/resources/meshes/buggy.webp) | <Playground id="#K7TJIG#1" title="Buggy" description=""/>
+Dude.babylon | 3.46 MB | ![dude](/img/resources/meshes/dude.webp) | <Playground id="#WLDCUC#2" title="Dude" description=""/>
+babylonJS_logo_v3.babylon | 7.51 KB | ![logo](/img/resources/meshes/logo.webp) | <Playground id="#17LHMG#1" title="Logo" description=""/>
+candle.babylon | 2.21 MB | ![candle](/img/resources/meshes/candle.webp) | <Playground id="#TSCJPP#1" title="Candle" description=""/>
+dummy2.babylon | 16.1 MB | ![dummy2](/img/resources/meshes/dummy2.webp) | <Playground id="#TBK09I#2" title="Dummy2" description=""/>
+dummy3.babylon | 7.6 MB | ![dummy3](/img/resources/meshes/dummy2.webp) | <Playground id="#C38BUD#1" title="Dummy3" description=""/>
+Rabbit.babylon | 164 KB | ![rabbit](/img/resources/meshes/rabbit.webp) | <Playground id="#NMU4ZM#1" title="Rabbit" description=""/>
+seagulf.glb | 934 KB | ![seagull](/img/resources/meshes/seagull.webp) | <Playground id="#8LFTCH#2" title="Seagull" description=""/>
+skull.babylon | 3.94 MB | ![skull](/img/resources/meshes/skull.webp) | <Playground id="#VV935G#2" title="Skull" description=""/>
+SSAOcat.babylon | 201 KB | ![cat](/img/resources/meshes/cat.webp) | <Playground id="#LCUPCU#1" title="Cat" description=""/>
+StanfordBunny.obj | 4.69 MB | ![bunny](/img/resources/meshes/bunny.webp) | <Playground id="#95MJI8#1" title="Bunny" description=""/>
+ufo.glb | 17 MB | ![ufo](/img/resources/meshes/ufo.webp) | <Playground id="#058SEW#3" title="UFO" description=""/>
+Elf.gltf | 401 KB | ![elf](/img/resources/meshes/elf.webp) | <Playground id="#XY6QF0" title="Elf" description=""/>
+
+## From the Assets Library
+
+This list of files is a small subset of the available models in the asset library [from the GitHub repo](https://github.com/BabylonJS/Assets/blob/master/Assets.md). When using a `scene` method to append or import scenes or meshes, the `rootUrl` parameter uses the Asset Librarian like this: Assets.meshes.meshname.rooturl, and the `filename` parameter is similar: Assets.meshes.meshname.filename. See the Playgrounds below for examples.
+
+Filename | Size | Image | Playground
+---|---|---|---
+aerobatic_plane.glb | 4.4 MB | ![plane](/img/resources/meshes/plane.webp) | <Playground id="#5NIBE1#207" title="Plane" description=""/>
+alien.glb | 15.1 MB | ![alien](/img/resources/meshes/alien.webp) | <Playground id="#8IMNBM#721" title="Alien" description=""/>
+BabylonJS-logo/v3/babylonJS_logo_solid_v3.babylon<br/>BabylonJS-logo/v3/babylonJS_logo_v3.babylon | 59 KB<br/>8 KB | ![babylonJS_logo_v3](/img/resources/meshes/babylonJS_logo_v3.webp) | <Playground id="#Q9JFZ1#3" title="Babylon_log_v3" description=""/>
+Chair/Chair.obj | 1.09 MB | ![chair](/img/resources/meshes/chair.webp) | <Playground id="#KJV35B#21" title="Chair" description=""/>
+Channel9/Channel9.stl | 1.03 MB | ![channel9](/img/resources/meshes/channel9.webp) | <Playground id="#AJJ8U5#52" title="Channel9" description=""/>
+clothFolds.glb | 2.21 MB | ![clothFolds](/img/resources/meshes/clothFolds.webp) | <Playground id="#5NIBE1#208" title="Cloth Folds" description=""/>
+CornellBox/cornellBox.glb | 162 kB | ![cornellBox-glb](/img/resources/meshes/cornellBox-glb.webp) | <Playground id="#4AJ16M#675" title="cornellBox-glb" description=""/>
+dragon.glb | 20 MB | ![georgia tech dragon](/img/resources/meshes/dragon.webp) | <Playground id="#MZ1I83#17" title="Dragon" description=""/>
+Dude/dude.babylon | 3.46 MB | ![dude](/img/resources/meshes/dude.webp) | <Playground id="#WLDCUC#190" title="Dude" description=""/>
+emoji_heart.glb | 1.08 MB | ![heart](/img/resources/meshes/heart.webp) | <Playground id="#4AJ16M#676" title="Heart" description=""/>
+ExplodingBarrel.glb | 2.9 MB | ![ExplodingBarrel](/img/resources/meshes/ExplodingBarrel.webp) | <Playground id="#4AJ16M#677" title="ExplodingBarrel" description=""/>
+flightHelmet.glb | 50.4 MB | ![helmet](/img/resources/meshes/helmet.webp) | <Playground id="#BVK9I0#102" title="Helmet" description=""/>
+fish.glb | 45.4 MB | ![fish](/img/resources/meshes/fish.webp) | <Playground id="#9CMU0F#38" title="Fish" description=""/>
+haunted_house.glb | 37.2 MB | ![haunted house](/img/resources/meshes/haunted_house.webp) | <Playground id="#E8UGIC#20" title="Haunted House" description=""/>
+head.glb | 25.9 MB | ![lee perry smith head](/img/resources/meshes/lee-perry-smith-head.webp) | <Playground id="#GA8DG5#6" title="Head" description=""/>
+marble.gltf | 30 KB | ![marble](/img/resources/meshes/marble.webp) | <Playground id="#36YIWS#5" title="Marble" description=""/>
+marbleTower.gltf | 2.60 MB | ![MarbleTower](/img/resources/meshes/MarbleTower.webp) | <Playground id="#FN0IGW#3" title="MarbleTower" description=""/>
+seagulf.glb | 934 KB | ![seagull](/img/resources/meshes/seagull.webp) | <Playground id="#8LFTCH#2131" title="Seagull" description=""/>
+shaderBall.glb | 3.95 MB | ![shaderBall](/img/resources/meshes/shaderBall.webp) | <Playground id="#2UPLBH#10" title="Shader Ball" description=""/>
+PBR_Spheres.glb | 3.38 Mo | ![PBR_Spheres](/img/resources/meshes/PBR_Spheres.webp) | <Playground id="#ISZ7Y2#98" title="PBR_Spheres" description=""/>
+BabylonShaderBall_Simple.gltf | 1.86 MB | ![BabylonShaderBall_Simple](/img/resources/meshes/BabylonShaderBall_Simple.webp) | <Playground id="#AE8AA3#7" title="Babylon Simple Shader Ball" description=""/>
+shark.glb | 14.7 MB | ![shark](/img/resources/meshes/shark.webp) | <Playground id="#ISZ7Y2#99" title="Shark" description=""/>
+Skull/skull.babylon | 3.94 MB | ![skull](/img/resources/meshes/skull.webp) | <Playground id="#VV935G#54" title="Skull" description=""/>
+solar_system.glb | 3.94 MB | ![solar system](/img/resources/meshes/solar_system.webp) | <Playground id="#KILIHT#22" title="Solar System" description=""/>
+toast_acrobatics.glb | 7.45 MB | ![toast acrobatics](/img/resources/meshes/toast_acrobatics.webp) | <Playground id="#KM2N07#38" title="Acrobatic Toast" description=""/>
+TrailMeshSpell/spellDisk.glb<br/>TrailMeshSpell/pinkEnergyBall.glb<br/>TrailMeshSpell/greenEnergyBall.glb<br/>TrailMeshSpell/yellowEnergyBall.glb | 2.37 MB<br/>2.41 MB<br/>4.45 MB<br/>2.22 MB | ![TrailMeshSpell](/img/resources/meshes/TrailMeshSpell.webp) | <Playground id="#AAP917#39" title="Trail Mesh Spell" description=""/>
+vintageFan_animated.gltf | 3.43 MB | ![vintageFan_animated](/img/resources/meshes/vintageFan_animated.webp) | <Playground id="#YBEKDT#17" title="Vintage Fan" description=""/>
+ufo.glb | 17 MB | ![ufo](/img/resources/meshes/ufo.webp) | <Playground id="#058SEW#331" title="UFO" description=""/>
+
+## Finding Camera Values
+
+To check the camera's distance from the displayed mesh, find the radius value by accessing the camera menu from the [Playground scene inspector](/toolsAndResources/inspectorv2) toolbar. Other useful values are angles, position, and the minZ and maxZ ranges.
+
+![values](/img/resources/meshes/values.webp)

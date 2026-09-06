@@ -1,0 +1,50 @@
+---
+title: Getting Started - Chapter 3 - Car Animation
+image:
+description: Continue learning about animations in Babylon.js.
+keywords: getting started, start, chapter 3, animation, animation basics
+further-reading:
+video-overview:
+video-content:
+---
+
+# Getting Started - Car Animation
+
+## Animate the Car in the Village
+
+In a similar way to how we animated the wheels, we now animate the car so that it travels in a straight line over 5 seconds, stops for 2 seconds, and then repeats.
+```javascript
+const animCar = new BABYLON.Animation("carAnimation", "position.x", 30, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE);
+
+const carKeys = []; 
+
+carKeys.push({
+    frame: 0,
+    value: -4
+});
+
+carKeys.push({
+    frame: 150,
+    value: 4
+});
+
+carKeys.push({
+    frame: 210,
+    value: 4
+});
+
+animCar.setKeys(carKeys);
+
+car.animations = [];
+car.animations.push(animCar);
+
+scene.beginAnimation(car, 0, 210, true);
+```
+
+<Playground id="#KDPAQ9#5561" title="Animated the Car Forward" description="Simple example of how to animate the car's position forward." image="/img/playgroundsAndNMEs/gettingStartedCarAnimation1.webp"/>
+
+After adjusting the position of the car and its route so that it travels past the village houses, we have:
+
+<Playground id="#KJ6XKH#1" title="Add the Car to the Village" description="Add the animating car back into the village." image="/img/playgroundsAndNMEs/gettingStartedCarAnimation2.webp"/>
+
+In this case, we built the car ourselves. Let's now look at a model character that we can import along with its built-in animation.

@@ -1,0 +1,13 @@
+---
+title: Babylon.js Official Addons
+image: /img/defaultImage.webp
+description: Learn all about the Babylon.js addons and how to use them in your projects.
+keywords: capabilities, engine, features, addons, official, extensions, plugins, utilities, babylon.js
+further-reading:
+video-overview:
+video-content:
+---
+
+# Babylon.js Official Add-ons
+
+This section contains all of our official add-ons from the [Addons npm package](https://www.npmjs.com/package/@babylonjs/addons).

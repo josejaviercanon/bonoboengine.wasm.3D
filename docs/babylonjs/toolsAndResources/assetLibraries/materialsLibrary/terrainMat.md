@@ -1,0 +1,46 @@
+---
+title: Terrain Material
+image: 
+description: The Babylon.js materials library terrain material displays up to 4 terrain textures.
+keywords: library, materials, materials library, terrain, terrain material
+further-reading:
+video-overview:
+video-content:
+---
+
+![Terrain Material](/img/extensions/materials/terrain.webp)
+
+## Playground example
+
+PG: <Playground id="#E6OZX#7" title="Terrain Material" description="Example of terrain material"/>
+
+## Using the terrain material
+
+The terrain material works with at least 4 textures:
+- 3 Diffuse textures. (required)
+- 3 Bump textures. (not required)
+- 1 Mixmap texture: represents the intensity of each diffuse texture according to the channels R (red), G (green), and B (blue). (required)
+
+In other words, the Mixmap texture mixes the 3 diffuse textures using the RGB color channels.
+A Mixmap texture looks like this (the result is shown in the screenshot above):
+![](/img/extensions/materials/terrainMixMap.webp)
+
+The method applied by the terrain material is also called "texture splatting".
+
+```
+var terrain = BABYLON.MeshBuilder.CreateGroundFromHeightMap("terrain", "heightMap.png", { width: 100, height: 100, subdivisions: 100, minHeight: 0, maxHeight: 10 }, scene);
+
+var terrainMaterial = new BABYLON.TerrainMaterial("terrainMaterial", scene);
+terrainMaterial.mixTexture = new BABYLON.Texture("mixMap.png", scene);
+terrainMaterial.diffuseTexture1 = new BABYLON.Texture("grass.png", scene);
+terrainMaterial.diffuseTexture2 = new BABYLON.Texture("rock.png", scene);
+terrainMaterial.diffuseTexture3 = new BABYLON.Texture("floor.png", scene);
+
+terrainMaterial.bumpTexture1 = new BABYLON.Texture("grassn.png", scene);
+terrainMaterial.bumpTexture2 = new BABYLON.Texture("rockn.png", scene);
+terrainMaterial.bumpTexture3 = new BABYLON.Texture("floor_bump.png", scene);
+
+terrain.material = terrainMaterial;
+```
+
+That's all.

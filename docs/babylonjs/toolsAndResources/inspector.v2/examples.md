@@ -1,0 +1,75 @@
+---
+title: Examples
+image:
+description: Inspector V2 extensibility examples.
+keywords: babylon.js, tools, resources, inspector, debug layer
+further-reading:
+video-overview:
+video-content:
+---
+
+The following are a number of concrete examples showing how to extend Inspector V2.
+
+<Alert severity="info">
+Most of the examples are implemented in [CodeSandbox.io](https://codesandbox.io/) rather than Babylon's [Playground](https://playground.babylonjs.com/) since Playground uses the Inspector UMD bundle which has extensibility limitations due to React and other dependencies being bundled and not re-exported. Additionally, many of the Inspector examples pull in OSS packages to better demonstrate extension possibilities, and this generally requires bundling, which Playground does not do.
+
+That said, you can test certain aspects of the Inspector API directly in Playground, including some basic extensibility. See https://playground.babylonjs.com/#UV17TL for an example.
+</Alert>
+
+<Alert severity="info">
+The code is shown by default for each example, but you can **drag the divider on the right toward the left to reveal a live demo of the example**. Be patient, as it will take a few seconds for the live demo to load!
+</Alert>
+
+## Side Panes
+
+This example demonstrates how to add an entirely new side pane (alongside Scene Explorer, Properties, etc.).
+
+In this example, the new side pane displays a treemap chart of mesh vertex counts. When you click a treemap node, it selects the corresponding mesh so you can see which one it is in Scene Explorer. Look for a new tab icon that looks like a treemap in the right pane toolbar area.
+
+<CodeSandbox id="7wll3y" title="Inspector V2 - Adding a Side Pane" />
+
+## Toolbar Items
+
+This example demonstrates how to add an item to the toolbar.
+
+For this example, assume that limiting draw calls is critical for your project, so you want a persistent draw call count with coloring that makes it very clear when the count exceeds thresholds you have defined. This example adds a draw call count to the bottom toolbar and, for demonstration purposes, animates the camera away from the model so more and more meshes are in the view frustum and not culled, thereby increasing the draw call count. Look in the lower-right corner for a draw call count that increases as the camera moves, and for the color change that draws attention to the high draw call count.
+
+<CodeSandbox id="jpzd28" title="Inspector V2 - Adding a Toolbar Item" />
+
+## Scene Explorer
+
+This example demonstrates adding a section to Scene Explorer. Note that Scene Explorer itself is a side pane and uses `IShellService`, just like the first example on this page, to add itself as a new side pane. It also exposes its own extensibility points to allow new sections (and commands) to be added to Scene Explorer.
+
+In this example, the project-specific code uses `AssetContainer`s, and the goal is to list those `AssetContainer`s in Scene Explorer to make it easy to understand which ones are currently loaded. Look in the Scene Explorer pane and you will see a new section at the top labeled "Asset Containers".
+
+<Alert severity="info">
+Adding entities only to Scene Explorer is of limited value, since you do not see any useful properties when you select them. In the next section, we'll add properties for our model objects to make the extension more useful!
+</Alert>
+
+<CodeSandbox id="695j5p" title="Inspector V2 - Adding a Scene Explorer Section" />
+
+## Properties
+
+This example demonstrates how to add a section to the Properties pane.
+
+Specifically, it builds on the previous example and adds properties for our model object. It creates sections for meshes, skeletons, and textures. Each of these sections lists the entities (meshes, skeletons, textures) that were loaded for this model, and links to each entity so you can select it and show it in Scene Explorer and the Properties pane. It also adds a property to the existing "General" section of `Mesh`es that links back to the owning model. This would likely be useful if you make heavy use of `AssetContainer`s (e.g. by loading glTF models) and want to understand which models contributed which entities to the scene.
+
+<CodeSandbox id="8k76r3" title="Inspector V2 - Adding to the Properties Pane" />
+
+## Custom Extensibility
+
+All of the examples so far only *consume* other services to add new functionality. You can also *produce* services that can be consumed by other services. The services you produce can provide state, functionality, or extension points.
+
+This example demonstrates how to produce a new service that can be consumed by other services.
+
+Specifically, it defines a "favorites" service that adds a side pane and *produces* a service that exposes a function for adding favorites. Then two additional services *consume* the favorites service to add a Scene Explorer command for adding an entity to favorites, as well as a Properties pane button for doing the same.
+
+<CodeSandbox id="rpky55" title="Inspector V2 - Producing a Service" />
+
+## Dynamic Extensions
+
+All of the examples so far have demonstrated [static](/toolsAndResources/inspectorv2/architecture#static-extensions) extensions, where new `ServiceDefinition`s are loaded immediately when `ShowInspector` is called. It is also possible to defer loading an extension until a user explicitly installs it through the Inspector's extensions dialog. These are called [dynamic](/toolsAndResources/inspectorv2/architecture#dynamic-extensions) extensions.
+
+This example modifies the [Toolbar Items](#toolbar-items) example above by making the graphics budget service and draw call toolbar item collectively a dynamic extension that must be installed before it is loaded. Notice that, in the example below, there is a second tab, `graphicsBudgetService.tsx`. It contains the default export needed for the `getExtensionModuleAsync` function to work correctly.
+
+<CodeSandbox id="98pthf" title="Inspector V2 - Dynamic Extension" files="/src/index.tsx,/src/graphicsBudgetService.tsx" />
