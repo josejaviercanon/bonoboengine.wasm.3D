@@ -17,7 +17,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Game.Engine\Game.Engine.csproj" />
     <ProjectReference Include="..\Game.UI\Game.UI.csproj" />
-    <ProjectReference Include="..\Game.Examples\Game.Examples.csproj" />
   </ItemGroup>
 
   <!-- Copy Vite + assets from Game.UI before build so wwwroot is populated -->

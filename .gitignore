@@ -436,7 +436,9 @@ FodyWeavers.xsd
 *.msp
 
 # Temp files
-src/Temp/*
+src/Temp/
 Temp/*
 nul* 
 .playwright-cli/
+Temp/
+TestResults/

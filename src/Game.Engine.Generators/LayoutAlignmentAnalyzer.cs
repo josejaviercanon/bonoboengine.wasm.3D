@@ -5,8 +5,8 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Game.Engine.Generators;
 
 /// <summary>
-///     Compile-time (IDE red-squiggle) validation of the zero-copy float32 layout
-///     (ADR-007/008). Complements the load-time <c>[ModuleInitializer]</c> assert:
+///     Compile-time (IDE red-squiggle) validation of the zero-copy float32 layout.
+///     Complements the load-time <c>[ModuleInitializer]</c> assert:
 ///     this analyzer runs during authoring, the module initializer guarantees the
 ///     final binary at WASM boot. Because <c>sizeof</c> of a custom struct is not a
 ///     compile-time constant, this analyzer sums the field float-widths (which the

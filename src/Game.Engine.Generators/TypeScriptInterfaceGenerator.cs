@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.Text;
 namespace Game.Engine.Generators;
 
 /// <summary>
-///     Emits the TypeScript half of the shared-memory float32 contract (ADR-007/008)
+///     Emits the TypeScript half of the shared-memory float32 contract 
 ///     from the C# structs marked <c>[TypeScriptExport]</c>, and a fail-fast
 ///     <c>[ModuleInitializer]</c> that asserts the computed strides match
 ///     <c>Game.Engine.ECS.SignalBufferLayout</c> at WASM boot. Single source of truth:
@@ -146,8 +146,8 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
             sb.AppendLine("            if (GeneratedSignalLayout." + t.Name + "Stride != global::" + InteropNames.EngineEcsNamespace + ".SignalBufferLayout." + constName + "Stride)");
             sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: " + t.Name + " float-stride drifted from SignalBufferLayout." + constName + "Stride.\");");
         }
-        sb.AppendLine("            if (GeneratedSignalLayout.SpriteStateStride != global::" + InteropNames.EngineEcsNamespace + ".SignalBufferLayout.TetrisStride)");
-        sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: SpriteState float-stride drifted from SignalBufferLayout.TetrisStride.\");");
+        //sb.AppendLine("            if (GeneratedSignalLayout.SpriteStateStride != global::" + InteropNames.EngineEcsNamespace + ".SignalBufferLayout.TetrisStride)");
+        //sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: SpriteState float-stride drifted from SignalBufferLayout.TetrisStride.\");");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine("}");

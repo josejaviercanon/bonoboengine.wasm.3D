@@ -1,6 +1,6 @@
 # Bonobo Engine — C# WASM 3D (Babylon.js + BepuPhysics2)
 
-C# browser-wasm monorepo: a pure C# game engine (`Game.Engine` with Arch ECS + BepuPhysics2), a Roslyn analyzer + source generator project (`Game.Engine.Generators`), a shared class library owning the Babylon.js frontend (`Game.UI`), a non-Blazor browser-wasm host (`Game.Wasm`), an example catalog (`Game.Examples`), and a TypeScript-driven Babylon.js build managed by Vite and Tailwind CLI.
+C# browser-wasm monorepo: a pure C# game engine (`Game.Engine` with Arch ECS + BepuPhysics2), a Roslyn analyzer + source generator project (`Game.Engine.Generators`), a shared class library owning the Babylon.js frontend (`Game.UI`), a non-Blazor browser-wasm host (`Game.Wasm`), and a TypeScript-driven Babylon.js build managed by Vite and Tailwind CLI.
 
 Start with this project mainly because current monogame at 2026 don't have export to web option. Note that for real time games, authoritative ECS in server is not the best option by the http event process for each render update, so added a compilation conditional for single player games.
 
@@ -38,7 +38,7 @@ To make this architecture work without destroying performance, you must isolate 
    - *State Management:* manages coordinates, stats, pathfinding matrices, and entity maps.
    - *The Deterministic Tick:* runs the Arch ECS systems each fixed step and emits one **batched** render signal per interval — not one event per entity — so the presentation layer mirrors authoritative state without per-frame interop.
    - *Physics:* `BepuPhysics2` (vendored at `src/bepuphysics2`, ADR-002/011). The asteroids sim runs a 2D-plane court inside the 3D solver (z-locked pose integrator), with contact filtering via a `CollidableProperty<int>` category matrix and begin-touch accumulation in `INarrowPhaseCallbacks`. Never pass a `ThreadDispatcher` to `Simulation.Timestep` on the browser host.
-2. **The Presentation Layer (Babylon.js v8 + Tailwind)** — a pure mirror of your C# state.
+2. **The Presentation Layer (Babylon.js v9 + Tailwind)** — a pure mirror of your C# state.
    - *Tailwind UI:* DOM overlays (menus, HUDs, inventory grids) on top of the canvas.
    - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array` over the WASM heap) and updates meshes/cameras per render frame — no per-entity interop calls.
 
@@ -52,13 +52,13 @@ Polling C# from JavaScript every frame, or serializing the whole state tree per 
 C# AUTHORITATIVE WORLD          Arch ECS + BepuPhysics2 (3D rigid-body authority)
         │  fixed timestep → RenderSnapshot (Tick, Pos, Velocity) → pinned buffer
         ▼
-BABYLON.JS v8                   meshes, thin instances, camera, particles, GPU
+BABYLON.JS v9                   meshes, thin instances, camera, particles, GPU
 ```
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
 - **Bridge status:** zero-copy shared memory pipeline implemented (ADR-008): C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α` (ADR-003).
 - **Domain ownership:** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
-- **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`, used by `AsteroidsSimulation` as a 2D-plane world). box2d3-wasm presentation physics was removed with the PixiJS migration (ADR-010).
+- **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`).
 
 Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/` (ADR-008…ADR-011).
 
@@ -66,12 +66,8 @@ Full matrices (ecosystem integration, implementation status, packages) live in `
 
 ## 🛠️ Current Iteration Status
 
-The PixiJS 2D renderer and the Box2D.NET physics backend were replaced (ADR-010/011):
-
-- **Physics:** `Box2D.NET` removed from the tree. `AsteroidsSimulation` now runs `BepuPhysics2` (sphere bodies, sub-stepped solves, `CollidableProperty<int>` contact filtering, begin-touch accumulation resolved after `Timestep`).
-- **Frontend:** PixiJS scene catalogue removed from `Game.UI`. `Frontend/game.ts` is a Babylon.js v8 bootstrap (ArcRotateCamera, hemispheric light, ground + demo mesh, render loop) proving the canvas pipeline. Game *sims* run headless; per-game Babylon renderers are the next iteration.
-- **Catalog:** `ExamplesCatalog.cs` lists the six games only (PixiJS example entries removed).
-- **Zero-copy bridge:** unchanged — `SignalBuffer`/`PinnedRenderBuffer`/`notifyRender` still stream float32 snapshots; the 3D transform layout (position + quaternion + scale) is a future ADR.
+- **Frontend:** `Frontend/game.ts` hosts the Babylon.js demo-balls scene (free camera + collisions, CannonJS physics arena, amiga-textured spheres, shadow-casting directional light) as the main page.
+- **Examples:** The WASM host stays as minimal interop bootstrap for future simulations.
 
 ## 🚀 Future-Proofing for Authoritative Multiplayer
 
@@ -84,7 +80,7 @@ The PixiJS 2D renderer and the Box2D.NET physics backend were replaced (ADR-010/
 
 - **Game State Engine (Arch ECS):** a high-performance, ultra-lightweight C# Archetype Entity Component System (vendored at `src/Arch`).
 - **Physics (BepuPhysics2):** deterministic 3D rigid-body simulation, single-threaded solves on the browser-wasm host (vendored at `src/bepuphysics2`).
-- **Canvas & Presentation Layer (Babylon.js v8):** 3D WebGL2/WebGPU hardware-accelerated rendering with mesh pooling, thin instances, and glTF support (`@babylonjs/core`).
+- **Canvas & Presentation Layer (Babylon.js v9):** 3D WebGL2/WebGPU hardware-accelerated rendering with mesh pooling, thin instances, and glTF support (`@babylonjs/core`).
 - **UI Layout & Theme Canvas (Tailwind CSS):** responsive HUDs, menus, popups, and inventory windows using standard HTML/CSS.
 - **Shared-Memory Bridge:** pinned `GCHandle` + `Float32Array` over the WASM heap; the C#↔TS layout is kept in lockstep by `Game.Engine.Generators` (analyzer + source generator + boot-time assert).
 
@@ -98,7 +94,6 @@ src/
 ├── Game.UI/                # Shared class library (Babylon.js frontend source + static assets)
 │   ├── wwwroot/dist/       # Vite + Tailwind output (generated — never hand-edit)
 │   └── Frontend/           # Babylon.js TypeScript entry (game.ts) + Tailwind CSS
-├── Game.Examples/          # Example catalog + IExampleSims seam (games only)
 ├── Game.Wasm/              # browser-wasm host (non-Blazor; [JSImport]/[JSExport] interop)
 ├── Game.Tests/             # xUnit v3 tests (determinism, ECS, snapshot shape)
 ├── Game.Tests.Aot/         # TUnit AOT/trim pattern tests
@@ -110,7 +105,6 @@ src/
 docs/
 ├── index.md                # Architecture source of truth
 ├── adr/                    # Architecture Decision Records
-├── 2d-games/               # 2D engine knowledge base (legacy PixiJS-era references)
 └── game-development/       # Curated engine-agnostic gamedev knowledge base
 AGENTS.md                   # Agent build/workflow rules
 ```
@@ -142,16 +136,15 @@ dotnet build bonoboWebGame.slnx
 dotnet run --project src/Game.Wasm    # serves http://localhost:5902 (see launchSettings.json)
 ```
 
-Open the URL in Chrome/Edge/Firefox — the C# simulation starts in-browser and
-Babylon.js renders the 3D scene. All input (`postCommand`) routes directly to
-the in-process sim via the `LocalBufferProvider` — no `fetch` POST, no EventSource.
+Open the URL in Chrome/Edge/Firefox — the Babylon.js demo-balls scene (CannonJS
+physics arena, amiga-textured spheres, free camera) renders fullscreen. No game
+examples or launch menu remain; the WASM host boots the interop bridge for future
+simulations.
 
 Render signals travel as float32 buffers: `DirectRenderTransport` encodes each
 batched signal into the canonical layout (`SignalBuffer.cs`), writes it into a
 pinned `GCHandle` `float[]`, and notifies JS via `[JSImport]("notifyRender")` —
-JS reads a `Float32Array` view over the WASM heap. Simulations are created
-lazily per visited scene (`SimHost`), so only the game you open pays the 60 Hz
-tick cost.
+JS reads a `Float32Array` view over the WASM heap.
 
 For best raw sim throughput, publish with AOT (needs
 `dotnet workload install wasm-tools`; dev runs stay interpreted):
@@ -182,19 +175,10 @@ dotnet test          # Game.Tests (xUnit v3) + Game.Tests.Aot (TUnit); Playwrigh
 
 > Build frontend assets before .NET commands. Do not run multiple `dotnet` commands concurrently — static-web-asset compression can race. See `AGENTS.md` for the full command reference.
 
-## Games
+## Games and Examples
 
-Sims are ported to the C# browser-wasm ECS engine; Babylon.js 3D renderers land
-per game in the next iteration (sims already run headless):
-
-|Done | Order | Game                    | What You'll Learn                                     |
-|---- | ----- | ----------------------- | ----------------------------------------------------- |
-| [X] | 1     | **Snake**               | Basic ECS, commands, delta events, basic physics      |
-| [X] | 2     | **Tetris**              | Grid systems, command validation, line clearing       |
-| [X] | 3     | **Breakout**            | Real-time physics, entity count                       |
-| [X] | 4     | **Asteroids**           | Entity spawning, wrap physics (Bepu), vectors, VFX    |
-| [X] | 5     | **Endless Race Runner** | Pseudo-3D pseudo-geometry, active entity pipelines    |
-| [X] | 6     | **Pac-Man**             | FSM AI, grid movement, power-up timers                |
+The main page renders the Babylon.js demo-balls scene; future games plug into the shared-memory bridge (`WasmInterop`
+buffer exports + `LocalBufferProvider`) kept in `Game.Wasm`.
 
 ## Licensing
 

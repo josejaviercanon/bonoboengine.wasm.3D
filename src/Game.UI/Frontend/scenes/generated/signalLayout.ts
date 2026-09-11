@@ -15,33 +15,6 @@ export interface BufferHeader {
 
 export const BUFFER_HEADER_LENGTH = 6;
 
-export interface AsteroidsSpriteState {
-    id: number;
-    x: number;
-    y: number;
-    rotation: number;
-    vX: number;
-    vY: number;
-    kind: number;
-    size: number;
-    r: number;
-    g: number;
-    b: number;
-}
-export const AsteroidsSpriteStateStride = 11;
-
-export interface BreakoutSpriteState {
-    id: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    r: number;
-    g: number;
-    b: number;
-}
-export const BreakoutSpriteStateStride = 8;
-
 export interface SpriteState {
     id: number;
     x: number;
@@ -51,49 +24,4 @@ export interface SpriteState {
     b: number;
 }
 export const SpriteStateStride = 6;
-
-export interface PacmanSpriteState {
-    id: number;
-    x: number;
-    y: number;
-    previousX: number;
-    previousY: number;
-    velocityX: number;
-    velocityY: number;
-    rotation: number;
-    kind: number;
-    direction: number;
-    mode: number;
-    visible: boolean;
-    r: number;
-    g: number;
-    b: number;
-    fruitItem: number;
-}
-export const PacmanSpriteStateStride = 16;
-
-export interface RacerCarState {
-    id: number;
-    z: number;
-    offset: number;
-    speed: number;
-    percent: number;
-    spriteKind: number;
-}
-export const RacerCarStateStride = 6;
-
-export interface SnakeSpriteState {
-    id: number;
-    x: number;
-    y: number;
-    previousX: number;
-    previousY: number;
-    velocityX: number;
-    velocityY: number;
-    kind: number;
-    r: number;
-    g: number;
-    b: number;
-}
-export const SnakeSpriteStateStride = 11;
 

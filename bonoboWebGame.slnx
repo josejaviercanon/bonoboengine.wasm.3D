@@ -4,7 +4,6 @@
     <Project Path="src/Arch.Generators/Arch.Generators.csproj" />
     <Project Path="src/Game.Engine.Generators/Game.Engine.Generators.csproj" />
     <Project Path="src/Game.Engine/Game.Engine.csproj" />
-    <Project Path="src/Game.Examples/Game.Examples.csproj" />
     <!-- TEMPORARY: web-only solution build to speed up local dev/CI.
          Game.Maui pulls the Android/iOS/MacCatalyst/Windows TFMs and MAUI workloads.
          Re-enable for native app work: build it directly with

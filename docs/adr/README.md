@@ -32,9 +32,3 @@ Architecture decisions for the Bonobo Engine are recorded here as ADRs, one file
 - Recommended entry points: `docs/game-development/session/session-prompt.md` (Decision Protocol) and `docs/game-development/ai-workflow/gamedev-rules.md` (Documentation Rules).
 
 ## Records
-
-- [`ADR-008: Zero-Copy Shared Memory Interop Pipeline`](ADR-008.md)
-- [`ADR-009: Strip Blazor Components for browser-wasm Native-AOT Host`](ADR-009.md)
-- [`ADR-010: Babylon.js replaces PixiJS (2D → 3D rendering)`](ADR-010-011-babylon-bepu.md)
-- [`ADR-011: BepuPhysics2 replaces Box2D.NET (authoritative physics)`](ADR-010-011-babylon-bepu.md)
-

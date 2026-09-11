@@ -19,10 +19,13 @@
     "url": "git+https://github.com/josejaviercanon/bonoboengine.wasm.3D.git"
   },
   "dependencies": {
-    "@babylonjs/core": "^9.0.0"
+    "@babylonjs/core": "^9.0.0",
+    "@babylonjs/gui": "^9.26.0",
+    "cannon": "^0.6.2"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
+    "@types/cannon": "^0.1.13",
     "@types/node": "^24.0.0",
     "autoprefixer": "^10.5.4",
     "postcss": "^8.5.26",

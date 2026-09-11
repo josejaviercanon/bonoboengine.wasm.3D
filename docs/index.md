@@ -175,7 +175,7 @@ The SSR page (`GameView.razor`) carries the initial payload to the client throug
 
 ### Step 3: The Babylon.js Scene (Zero-Copy Buffer Consumer) — current
 
-`src/Game.UI/Frontend/game.ts` bootstraps Babylon.js (`initGame` / `renderText` / `renderScene`). The Babylon scene renders the shared 3D canvas (camera, light, ground) and will map batched float32 snapshots from the pinned buffer onto mesh transforms (per-game renderers are the next iteration). No game rules or boundary checks in JS.
+`src/Game.UI/Frontend/game.ts` hosts the Babylon.js demo-balls scene (`initGame` — FreeCamera + collisions, CannonJS physics arena, amiga-textured spheres, shadow-casting directional light). The game examples and launch menu were removed; future simulations will map batched float32 snapshots from the pinned buffer onto mesh transforms via the shared-memory bridge. No game rules or boundary checks in JS.
 
 The zero-copy shared memory pipeline (ADR-008) replaces the old SSE/JSON bridge: batched float32 snapshots → pinned `GCHandle` buffer → `Float32Array` over WASM heap → client interpolation (ADR-003). The legacy SSE consumer blueprint below is kept for historical context only.
 
