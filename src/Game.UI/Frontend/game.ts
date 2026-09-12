@@ -10,8 +10,10 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { CreateLines } from '@babylonjs/core/Meshes/Builders/linesBuilder';
-import { PhysicsImpostor } from '@babylonjs/core/Physics/v1/physicsImpostor';
-import { CannonJSPlugin } from '@babylonjs/core/Physics/v1/Plugins/cannonJSPlugin';
+import HavokPhysics from '@babylonjs/havok';
+import { HavokPlugin } from '@babylonjs/core/Physics/v2/Plugins/havokPlugin';
+import { PhysicsAggregate } from '@babylonjs/core/Physics/v2/physicsAggregate';
+import { PhysicsShapeType } from '@babylonjs/core/Physics/v2/IPhysicsEnginePlugin';
 import '@babylonjs/core/Physics/physicsEngineComponent';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import '@babylonjs/core/Culling/ray';
@@ -20,7 +22,6 @@ import { Slider } from '@babylonjs/gui/2D/controls/sliders/slider';
 import { StackPanel } from '@babylonjs/gui/2D/controls/stackPanel';
 import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import { Control } from '@babylonjs/gui/2D/controls/control';
-import cannon from 'cannon';
 import { registerLocalBufferProvider, type LocalBufferProvider } from './signalSource';
 
 // Debug helper: every interop entry/exit point logs under one prefix so the
@@ -33,6 +34,9 @@ declare global {
         registerLocalBufferProvider: (provider: LocalBufferProvider) => void;
         __spector: unknown;
         __scene: unknown;
+        __physics: {
+            getSphereVelocity: (name: string) => { x: number; y: number; z: number };
+        };
     }
 }
 
@@ -96,7 +100,22 @@ export async function initGame(containerId: string): Promise<void> {
 
     const shadowGenerator = new ShadowGenerator(2048, light);
 
-    scene.enablePhysics(new Vector3(0, -9.8, 0), new CannonJSPlugin(true, 10, cannon));
+    // Official Havok physics (v2 plugin): wasm boots async, then the arena
+    // below is driven through PhysicsAggregate bodies. The wasm binary ships
+    // alongside the bundle (see the build:js copy step) and is fetched via
+    // locateFile instead of a base64 blob inside game-bundle.js.
+    const havokInstance = await HavokPhysics({ locateFile: () => './dist/HavokPhysics.wasm' });
+    scene.enablePhysics(new Vector3(0, -9.8, 0), new HavokPlugin(true, havokInstance));
+
+    const sphereAggregates = new Map<string, PhysicsAggregate>();
+    window.__physics = {
+        getSphereVelocity: (name: string) => {
+            const agg = sphereAggregates.get(name);
+            if (!agg) return { x: 0, y: 0, z: 0 };
+            const v = agg.body.getLinearVelocity();
+            return { x: v.x, y: v.y, z: v.z };
+        },
+    };
 
     const pp = { mass: 1, friction: 0.5, restitution: 0.8 };
 
@@ -104,25 +123,20 @@ export async function initGame(containerId: string): Promise<void> {
     sphere1.material = materialAmiga;
     sphere1.position = new Vector3(-20, -3.5, 0);
     shadowGenerator.addShadowCaster(sphere1);
-    sphere1.physicsImpostor = new PhysicsImpostor(sphere1, PhysicsImpostor.SphereImpostor, pp, scene);
+    sphereAggregates.set(sphere1.name, new PhysicsAggregate(sphere1, PhysicsShapeType.SPHERE, pp, scene));
 
     const sphere2 = CreateSphere('Sphere2', { diameter: 2, segments: 16 }, scene);
     sphere2.material = materialAmiga;
     sphere2.position = new Vector3(5, -3.5, 0);
     shadowGenerator.addShadowCaster(sphere2);
-    sphere2.physicsImpostor = new PhysicsImpostor(sphere2, PhysicsImpostor.SphereImpostor, pp, scene);
+    sphereAggregates.set(sphere2.name, new PhysicsAggregate(sphere2, PhysicsShapeType.SPHERE, pp, scene));
 
-    const damping = 0.2;
-    const imp1 = sphere1.physicsImpostor!;
-    const imp2 = sphere2.physicsImpostor!;
-    if (imp1.physicsBody.setDamping) {
-        imp1.physicsBody.setDamping(damping, damping);
-        imp2.physicsBody.setDamping(damping, damping);
-    }
-    if (imp1.physicsBody.linearDamping) {
-        imp1.physicsBody.linearDamping = 0.4;
-        imp2.physicsBody.linearDamping = 0.4;
-    }
+    const agg1 = sphereAggregates.get(sphere1.name)!;
+    const agg2 = sphereAggregates.get(sphere2.name)!;
+    agg1.body.setLinearDamping(0.4);
+    agg1.body.setAngularDamping(0.2);
+    agg2.body.setLinearDamping(0.4);
+    agg2.body.setAngularDamping(0.2);
 
     const ground = CreateBox('Ground', { size: 1 }, scene);
     ground.scaling = new Vector3(100, 1, 100);
@@ -166,13 +180,13 @@ export async function initGame(containerId: string): Promise<void> {
 
     CreateLines('lines', { points: [new Vector3(-50, -4.5, 0), new Vector3(50, -4.5, 0)] }, scene);
 
-    ground.physicsImpostor = new PhysicsImpostor(ground, PhysicsImpostor.BoxImpostor, { mass: 0, friction: 2, restitution: 0.7 }, scene);
-    border0.physicsImpostor = new PhysicsImpostor(border0, PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.7 }, scene);
-    border1.physicsImpostor = new PhysicsImpostor(border1, PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.7 }, scene);
-    border2.physicsImpostor = new PhysicsImpostor(border2, PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.7 }, scene);
-    border3.physicsImpostor = new PhysicsImpostor(border3, PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.7 }, scene);
+    new PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0, friction: 2, restitution: 0.7 }, scene);
+    new PhysicsAggregate(border0, PhysicsShapeType.BOX, { mass: 0, restitution: 0.7 }, scene);
+    new PhysicsAggregate(border1, PhysicsShapeType.BOX, { mass: 0, restitution: 0.7 }, scene);
+    new PhysicsAggregate(border2, PhysicsShapeType.BOX, { mass: 0, restitution: 0.7 }, scene);
+    new PhysicsAggregate(border3, PhysicsShapeType.BOX, { mass: 0, restitution: 0.7 }, scene);
 
-    sphere1.physicsImpostor!.setLinearVelocity(new Vector3(30, 0, -6));
+    agg1.body.setLinearVelocity(new Vector3(30, 0, -6));
 
     const spin = true;
     let i = 0;
@@ -181,8 +195,8 @@ export async function initGame(containerId: string): Promise<void> {
         if (!spin) return;
         i++;
         if (i < 300 && i % 5 === 0) {
-            const v = sphere1.physicsImpostor!.getLinearVelocity()!;
-            sphere1.physicsImpostor!.applyForce(
+            const v = agg1.body.getLinearVelocity();
+            agg1.body.applyForce(
                 new Vector3(0, 0, v.x * 0.8),
                 sphere1.getAbsolutePosition().add(new Vector3(0, 0, -10))
             );
@@ -226,12 +240,14 @@ export async function initGame(containerId: string): Promise<void> {
     scene.onPointerObservable.add((evt) => {
         if (evt.type !== PointerEventTypes.POINTERPICK) return;
         const mesh = evt.pickInfo?.pickedMesh;
-        if (!mesh || !mesh.name.startsWith('Sphere') || !mesh.physicsImpostor) return;
+        if (!mesh) return;
+        const agg = sphereAggregates.get(mesh.name);
+        if (!agg) return;
         const from = camera.position;
         const to = mesh.getAbsolutePosition();
         const dir = to.subtract(from);
         dir.normalize();
-        mesh.physicsImpostor.applyImpulse(dir.scale(impulseForce), to);
+        agg.body.applyImpulse(dir.scale(impulseForce), to);
     });
 
     engine.runRenderLoop(() => scene?.render());

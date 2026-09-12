@@ -69,8 +69,7 @@ test.describe('Game.Wasm browser-wasm host', () => {
 
     const readMag = () =>
       page.evaluate(() => {
-        const scene = (window as any).__scene;
-        const v = scene.getMeshByName('Sphere1').physicsImpostor.getLinearVelocity();
+        const v = (window as any).__physics.getSphereVelocity('Sphere1');
         return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
       });
 

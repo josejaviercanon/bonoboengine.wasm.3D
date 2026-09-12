@@ -12,6 +12,16 @@ export default defineConfig(({ mode }) => ({
     define: {
         __RENDER_SOURCE__: JSON.stringify(renderSource(mode))
     },
+  resolve: {
+    alias: {
+      // Use the UMD build of @babylonjs/havok: its ESM entry embeds the
+      // wasm as a base64 blob via new URL(..., import.meta.url), which Vite
+      // inlines into game-bundle.js (~3 MB dead weight). The UMD build
+      // fetches HavokPhysics.wasm at runtime instead; the binary ships
+      // alongside the bundle via the build:js copy step and locateFile.
+      '@babylonjs/havok': resolve(__dirname, 'node_modules/@babylonjs/havok/lib/umd/HavokPhysics_umd.js')
+    }
+  },
   build: {
     lib: {
       entry: resolve(__dirname, 'Frontend/game.ts'),
