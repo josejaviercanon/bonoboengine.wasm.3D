@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
-// Compile-time render-source flag (ADR-007): 'local-buffer' (DEFAULT —
+// Compile-time render-source flag: 'local-buffer' (DEFAULT —
 // co-located Game.Wasm host, matches the C# SINGLE_PLAYER_LOCAL default) or
 // 'sse' (`vite build --mode web` — Game.Web static-SSR bridge, multiplayer).
 // `define` replaces the identifier before bundling so the unused transport

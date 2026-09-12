@@ -24,25 +24,25 @@ Babylon.js v9 Presentation Layer (WebGL2 / WebGPU pipelines)
    |-- meshes |-- thin instances |-- cameras |-- PBR |-- glTF 2.0 (target)
 ```
 
-## Three Layers (ADR-001)
+## Three Layers
 
 | Layer | Role | Status |
 | --- | --- | --- |
 | **1. C# Authoritative World** | ECS + BepuPhysics2; gameplay physics, collisions, rules, deterministic tick. Sole authority. | Arch ECS implemented (`EcsSimulation` 60 Hz, `MovementSystem`/`ColorSystem`, batched `EcsRenderSignal`, SSR `Snapshot()`; games: Snake, Tetris, Breakout, Asteroids, Pacman, Racer). BepuPhysics2 **wired** into `Game.Engine` and used by `AsteroidsSimulation` as the authoritative physics world (sphere bodies, sub-stepped solves, contact filtering via `CollidableProperty<int>` matrix, begin-touch accumulation in `INarrowPhaseCallbacks`, screen wrap, deterministic single-threaded `Timestep` with null `ThreadDispatcher`). |
 | **2. Presentation World** | Client-side interpolation between authoritative snapshots (default). Pure mirror of authoritative state. | Interpolation math implemented in the shared-buffer decoders (`SnapshotBuffer`); per-game Babylon renderers that consume the buffers are **Target**. |
-| **3. Babylon.js v9** | Meshes, thin instances, cameras, lights, materials, particles, GPU render. | Main-page demo-balls scene implemented (`initGame` in `Frontend/game.ts`: FreeCamera + collisions, CannonJS physics arena, amiga-textured spheres, shadow-casting directional light). Game examples and the launch menu were removed (ADR-010 follow-up); the shared-memory bridge stays for future simulations. |
+| **3. Babylon.js v9** | Meshes, thin instances, cameras, lights, materials, particles, GPU render. | Main-page demo scene implemented (`initGame` in `Frontend/game.ts`: FreeCamera + collisions, CannonJS physics arena, amiga-textured spheres, shadow-casting directional light). The shared-memory bridge stays for future simulations. |
 
 Rule: never move simulation back-and-forth through JS interop every frame. The simulation writes batched snapshots into shared memory; Babylon reads them at render-frame rate. Client-side interpolation implementation guide: `docs/architecture/render-interpolation.md`.
 
-## The WASM->JS Bridge (ADR-003, ADR-008)
+## The WASM->JS Bridge
 
 **Problem:** per-entity interop at 60 FPS saturates the boundary; simulation (60 Hz) and display (144 Hz) differ in time domain -> jitter.
 
-**Implemented (ADR-008):** zero-copy shared-memory pipeline. The simulation writes each batched render snapshot into a pinned `float[]` (`GCHandle.Alloc(..., Pinned)`), passes the raw pointer to JS via `[JSImport]("notifyRender")`, and JS reads `new Float32Array(heap.buffer, ptr, count)` over the WASM heap — no JSON, no byte[] copy, no `IJSRuntime`. Client interpolates: `P_render = P_prev + (P_curr - P_prev) * alpha`, `alpha = (T_now - T_last_tick) / T_tick`.
+**Implemented:** zero-copy shared-memory pipeline. The simulation writes each batched render snapshot into a pinned `float[]` (`GCHandle.Alloc(..., Pinned)`), passes the raw pointer to JS via `[JSImport]("notifyRender")`, and JS reads `new Float32Array(heap.buffer, ptr, count)` over the WASM heap — no JSON, no byte[] copy, no `IJSRuntime`. Client interpolates: `P_render = P_prev + (P_curr - P_prev) * alpha`, `alpha = (T_now - T_last_tick) / T_tick`.
 
 **Deprecated:** `GET /api/ecs/stream` SSE pushing `event: sprite-move` with batched `SpriteState[]` JSON — the legacy transport, superseded by the pinned-buffer path (retained only in the opt-in multiplayer `--mode web` / `npm run build:web` build).
 
-The canonical float32 layout lives in `Game.Engine.ECS.SignalBuffer.cs` (`SignalBuffer` + `SignalBufferLayout` + `SignalBufferEncoders`). The C# and TS halves are kept in lockstep by `src/Game.Engine.Generators` — see "Zero-Copy Layout Guardrails" below. The 3D transform layout (position + quaternion + scale) is a future ADR; the current float layouts remain 2D-shaped until the game renderers land.
+The canonical float32 layout lives in `Game.Engine.ECS.SignalBuffer.cs` (`SignalBuffer` + `SignalBufferLayout` + `SignalBufferEncoders`). The C# and TS halves are kept in lockstep by `src/Game.Engine.Generators` — see "Zero-Copy Layout Guardrails" below. The 3D transform layout (position + quaternion + scale) is a future design; the current float layouts remain 2D-shaped until the game renderers land.
 
 ## Zero-Copy Layout Guardrails
 
@@ -54,9 +54,9 @@ The C# float32 layout and the TypeScript decoders must never drift. `src/Game.En
 | Boot-time static assert | Load-time (WASM boot) | `TypeScriptInterfaceGenerator` emits `GeneratedSignalLayout` + a `[ModuleInitializer]` that asserts each computed stride equals the matching `SignalBufferLayout` constant. |
 | TypeScript half | Build-time | The same generator writes `src/Game.UI/Frontend/scenes/generated/signalLayout.ts` (interfaces + stride constants). |
 
-Every sprite-state record struct carries the marker: `SpriteState` (stride 6), `SnakeSpriteState` (11), `PacmanSpriteState` (16), `BreakoutSpriteState` (8), `AsteroidsSpriteState` (11), `RacerCarState` (6).
+Every sprite-state record struct carries the marker (e.g. `SpriteState`, stride 6).
 
-## Physics Architecture (ADR-002, ADR-005 → ADR-011)
+## Physics Architecture
 
 ```
 C# ECS + BepuPhysics2 (authoritative) -> snapshots -> shared-memory bridge
@@ -64,12 +64,12 @@ C# ECS + BepuPhysics2 (authoritative) -> snapshots -> shared-memory bridge
    \-- Babylon.js v9 renderer (target)
 ```
 
-- **BepuPhysics2** = authoritative gameplay physics in the C# ECS loop (vendored at `src/bepuphysics2`, ADR-011). Deterministic single-threaded solves (null `ThreadDispatcher`); no JS-side physics world.
+- **BepuPhysics2** = authoritative gameplay physics in the C# ECS loop (vendored at `src/bepuphysics2`). Deterministic single-threaded solves (null `ThreadDispatcher`); no JS-side physics world.
 - **Custom lerp** = default for plain interpolation (zero-overhead).
 - Four answers: BepuPhysics2 = "where is it really?"; interpolation = "where to draw?"; Babylon.js = "how to render?"
-- **Removed:** Box2D.NET (backend) and box2d3-wasm (JS presentation physics) were removed in the 3D migration (ADR-010/011). The asteroids court now runs as a 2D plane inside the 3D solver: zero gravity, z-locked linear velocity and off-z angular velocity in the pose integrator, `CollidableProperty<int>` category matrix for contact filtering.
+- **Removed:** Box2D.NET (backend) and box2d3-wasm (JS presentation physics) were removed in the 3D migration. The asteroids court now runs as a 2D plane inside the 3D solver: zero gravity, z-locked linear velocity and off-z angular velocity in the pose integrator, `CollidableProperty<int>` category matrix for contact filtering.
 
-## Skeletal Animation — Two Pipelines (ADR-004)
+## Skeletal Animation — Two Pipelines
 
 - **Pipeline A — Authoring (offline):** AI Agent + Blender `bpy` -> armature + animations -> `.glb`. `AI + Blender = Content Pipeline`, not game runtime.
 - **Pipeline B — Runtime:** `.glb` -> glTF Importer (C#) -> ECS -> `AnimationSystem` -> `TransformSystem` -> `SkinningSystem` -> joint matrix palette -> Babylon.js/GPU.
@@ -85,7 +85,7 @@ SkinnedMeshComponent - RenderComponent
 
 Animation state machine belongs to the ECS, not glTF. See `docs/2d-skeletal-animations/index.md`.
 
-## Domain Responsibility Matrix (ADR-006)
+## Domain Responsibility Matrix
 
 | Responsibility | C# (Sim) | Babylon.js (Pres.) |
 | --- | :---: | :---: |
@@ -104,7 +104,7 @@ Animation state machine belongs to the ECS, not glTF. See `docs/2d-skeletal-anim
 
 | Component | Runtime | State source of truth | Interop | Role |
 | --- | --- | --- | --- | --- |
-| Babylon.js core (`@babylonjs/core` v9) | JS (WebGL2/WebGPU) | JS scene graph | shared memory buffer (implemented, ADR-008) | View layer; consumes transform buffers |
+| Babylon.js core (`@babylonjs/core` v9) | JS (WebGL2/WebGPU) | JS scene graph | shared memory buffer (implemented) | View layer; consumes transform buffers |
 | Babylon thin instances (`thinInstanceSetBuffer`) | JS (GPU) | C# transform array | shared memory buffer (target) | large entity counts, single draw call |
 | Babylon cameras (ArcRotate etc.) | JS | C# camera entity (target) | shared buffer (target) | C# `CameraSystem` focus -> JS camera |
 | glTF 2.0 / `.glb` | JS (GPU skinning, target) | C# skeleton comps (target) | event-driven | animation triggers from C#; skinning on GPU |
@@ -113,25 +113,21 @@ Animation state machine belongs to the ECS, not glTF. See `docs/2d-skeletal-anim
 
 ## Ecosystem Packages
 
-The Babylon.js v9 stack is declared in `src/Game.UI/package.json`: `@babylonjs/core` (tree-shaken deep imports). **PixiJS, @pixi/*, box2d3-wasm and the PixiJS example scenes were removed** (ADR-010). Vendored C# `src/bepuphysics2` (BepuPhysics + BepuUtilities, net10.0) is **referenced** by `Game.Engine.csproj` and used by `AsteroidsSimulation`; `src/BrainAI` (pathfinding/AI) remains unreferenced.
+The Babylon.js v9 stack is declared in `src/Game.UI/package.json`: `@babylonjs/core` (tree-shaken deep imports). Vendored C# `src/bepuphysics2` (BepuPhysics + BepuUtilities, net10.0) is **referenced** by `Game.Engine.csproj`; `src/BrainAI` (pathfinding/AI) remains unreferenced.
 
 ## Implementation Status
 
 | Capability | Status |
 | --- | --- |
 | Arch ECS sim (60 Hz, systems, batched signal) | Implemented |
-| Babylon.js demo-balls main page (`initGame`, canvas, FreeCamera + CannonJS arena, amiga spheres) | Implemented (main page; ADR-010) |
-| Babylon.js demo-balls scene (`initGame`, free camera + CannonJS physics arena, amiga spheres) | Implemented (main page) |
-| BepuPhysics2 authoritative physics in ECS loop (Asteroids: sphere bodies, contact events, wrap, 2D plane) | Implemented (ADR-011) |
+| Babylon.js main page scene (`initGame`, canvas, FreeCamera + CannonJS arena, amiga spheres) | Implemented (main page) |
+| BepuPhysics2 authoritative physics in ECS loop (Asteroids: sphere bodies, contact events, wrap, 2D plane) | Implemented |
 | Per-game Babylon renderers (buffer consumers, thin instances) | Target |
-| 3D transform float32 layout (position + quaternion + scale) | Target (future ADR) |
-| Render transport seam: `IRenderTransport<TSignal>` injected into all sims, `ServerRenderTransport` default, `SINGLE_PLAYER_LOCAL` build switches in `Game.Engine.csproj` | Implemented (ADR-007 Phase 1) |
-| Single-player-local default: `SINGLE_PLAYER_LOCAL` + `local-buffer` are the default builds; `fetch` POST exists only in the `--mode web` / `npm run build:web` multiplayer branch | Implemented (ADR-007) |
-| `Game.Wasm` co-located host: `PinnedRenderBuffer` + `DirectRenderTransport` (zero-copy: pinned `GCHandle` → `[JSImport] notifyRender(ptr, count)` → JS reads `Float32Array` over WASM heap), typed `[JSExport]` commands, `WasmInterop` bridge module (`wasm-interop.js`). | Implemented (ADR-007 Phase 3 / ADR-008) |
+| 3D transform float32 layout (position + quaternion + scale) | Target |
+| Render transport seam: `IRenderTransport<TSignal>` injected into all sims, `ServerRenderTransport` default, `SINGLE_PLAYER_LOCAL` build switches in `Game.Engine.csproj` | Implemented |
+| Single-player-local default: `SINGLE_PLAYER_LOCAL` + `local-buffer` are the default builds; `fetch` POST exists only in the `--mode web` / `npm run build:web` multiplayer branch | Implemented |
+| `Game.Wasm` co-located host: `PinnedRenderBuffer` + `DirectRenderTransport` (zero-copy: pinned `GCHandle` → `[JSImport] notifyRender(ptr, count)` → JS reads `Float32Array` over WASM heap), typed `[JSExport]` commands, `WasmInterop` bridge module (`wasm-interop.js`). | Implemented |
 | example interfaces game scene or simulation `IExampleSims` seam — `SimHost` provides lazy sims in `Game.Wasm` | |
-| `Game.Wasm` Release AOT publish — `RunAOTCompilation` + `WasmStripIL`, vendored Arch generic templates capped at arity 15 (`Helpers.ttinclude` `Amount=16`); `[JSImport]/[JSExport]` source-gen interop (AOT-safe, no reflection) | Implemented (ADR-007 Phase 3) |
-| Interop hygiene — `WasmInterop.Initialize` in `Program.cs`, `babylon-bundle-ready` event handshake, no `DotNetObjectReference`/`CommandJsonContext` | Implemented (ADR-008) |
+| `Game.Wasm` Release AOT publish — `RunAOTCompilation` + `WasmStripIL`, vendored Arch generic templates capped at arity 15 (`Helpers.ttinclude` `Amount=16`); `[JSImport]/[JSExport]` source-gen interop (AOT-safe, no reflection) | Implemented |
+| Interop hygiene — `WasmInterop.Initialize` in `Program.cs`, `babylon-bundle-ready` event handshake, no `DotNetObjectReference`/`CommandJsonContext` | Implemented |
 | Zero-copy layout guardrails — `Game.Engine.Generators`: `[TypeScriptExport]` stride analyzer (`BNOBO001`/`BNOBO002`) + `GeneratedSignalLayout` `[ModuleInitializer]` assert + generated `signalLayout.ts` | Implemented |
-| BepuPhysics2 for other games (Snake/Tetris/Breakout) | Target |
-| glTF importer + skeletal ECS components | Target |
-| Camera / tilemap / audio / culler integration | Target |

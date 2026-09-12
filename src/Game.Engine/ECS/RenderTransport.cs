@@ -1,14 +1,14 @@
 namespace Game.Engine.ECS;
 
 /// <summary>
-///     Transport seam between a simulation and its presentation layer (ADR-007).
+///     Transport seam between a simulation and its presentation layer.
 ///     The simulation pushes batched render signals; the implementation decides how
 ///     they reach the consumer — an in-process event consumed by the SSE endpoints
 ///     (server-authoritative host), or a direct memory path for the co-located
 ///     single-player host (Phase 2: pinned buffer read as a <c>Float32Array</c>).
 ///     Replaces the per-simulation <c>OnRenderSignal?.Invoke</c> emission sites so a
 ///     co-located build can bypass the HTTP/SSE/JSON boundary without touching
-///     simulation logic (ADR-001/003 stay intact).
+///     simulation logic.
 /// </summary>
 /// <typeparam name="TSignal">Batched render-signal record emitted by the simulation.</typeparam>
 public interface IRenderTransport<TSignal>
@@ -21,9 +21,9 @@ public interface IRenderTransport<TSignal>
 }
 
 /// <summary>
-///     Default transport for the server-authoritative host (ADR-001): signals are
+///     Default transport for the server-authoritative host: signals are
 ///     delivered as in-process events that the ASP.NET Core SSE endpoints serialize
-///     to JSON and stream to the browser. Behavior is identical to the pre-ADR-007
+///     to JSON and stream to the browser. Behavior is identical to the previous
 ///     per-simulation <c>OnRenderSignal</c> events.
 /// </summary>
 public sealed class ServerRenderTransport<TSignal> : IRenderTransport<TSignal>

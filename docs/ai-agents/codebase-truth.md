@@ -2,7 +2,7 @@
 
 Verified against the checked-in sources. When prose docs and these facts disagree, code wins.
 
-## BepuPhysics2 (vendored `src/bepuphysics2`, net10.0, ADR-011)
+## BepuPhysics2 (vendored `src/bepuphysics2`, net10.0)
 
 - Simulation creation: `Simulation.Create<TNarrowPhaseCallbacks, TPoseIntegratorCallbacks>(BufferPool, narrowPhase, poseIntegrator, SolveDescription, ...)` — generic struct callbacks; `Initialize(Simulation)` is invoked inside Create.
 - `SolveDescription(int velocityIterationCount, int substepCount, ...)`.
@@ -30,5 +30,5 @@ Verified against the checked-in sources. When prose docs and these facts disagre
 
 - C# writes batched snapshots into pinned `float[]` (`GCHandle.Alloc(..., Pinned)`) via `PinnedRenderBuffer` + `DirectRenderTransport`; JS reads `new Float32Array(heap.buffer, ptr, count)` (`notifyRender` → `runtime.localHeapViewF32()`).
 - Signal layout: 6-float header (`seq, epoch, entityCount, stride, stepMs, tickMs`) + extras + entity records; strides pinned by `Game.Engine.Generators` (analyzer BNOBO001/002 + `GeneratedSignalLayout` `[ModuleInitializer]` assert + generated `scenes/generated/signalLayout.ts`).
-- Browser host event handshake: `babylon-bundle-ready` (was `pixi-bundle-ready`).
+- Browser host event handshake: `babylon-bundle-ready`.
 - Playwright: `Game.Wasm` host binds port 5902 via `launchSettings.json` `applicationUrl` (or `ASPNETCORE_URLS` with `--no-launch-profile`); Chrome channel fallback `GAME_WEB_CHROME` → `executablePath`.

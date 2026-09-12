@@ -72,9 +72,8 @@ export async function initGame(containerId: string): Promise<void> {
     window.__scene = scene;
     scene.clearColor = new Color4(0.5, 0, 0.5, 1);
 
-    // Demo-balls scene (ported from playground demo-balls.html): free camera
-    // with collisions, amiga-textured spheres bouncing on a CannonJS physics
-    // arena with shadow-casting directional light.
+    // Free camera with collisions, amiga-textured spheres bouncing on a
+    // physics arena with shadow-casting directional light.
     const camera = new FreeCamera('Camera', new Vector3(-25, 20, -70), scene);
     camera.attachControl(canvas, true);
     camera.checkCollisions = true;
@@ -266,7 +265,7 @@ async function initSpector(_canvas: HTMLCanvasElement): Promise<void> {
 dbg('game-bundle loaded, exposing window.initGame');
 
 window.initGame = initGame;
-// ADR-007 Phase 2/3: the co-located Game.Wasm host registers its in-process
+// The co-located Game.Wasm host registers its in-process
 // command/signal bridge through this global (see wwwroot/index.html of that host).
 window.registerLocalBufferProvider = registerLocalBufferProvider;
 

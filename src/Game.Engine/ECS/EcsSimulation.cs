@@ -41,8 +41,8 @@ public sealed class EcsSimulation : IDisposable
     private readonly IRenderTransport<EcsRenderSignal> _renderTransport;
 
     /// <summary>
-    ///     Batched render signal, delivered through the <see cref="IRenderTransport{TSignal}"/> seam
-    ///     (ADR-007). Forwarding event keeps the SSE host subscription contract unchanged.
+    ///     Batched render signal, delivered through the <see cref="IRenderTransport{TSignal}"/> seam.
+    ///     Forwarding event keeps the SSE host subscription contract unchanged.
     /// </summary>
     public event Action<EcsRenderSignal>? OnRenderSignal
     {

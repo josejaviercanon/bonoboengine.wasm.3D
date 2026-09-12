@@ -2,8 +2,8 @@
 namespace Game.Engine.ECS;
 
 /// <summary>
-///     Canonical shared-memory float32 signal layout — the C# half of the ADR-007
-///     Phase 2/3 contract. The TypeScript half is <c>src/Game.UI/Frontend/scenes/bufferLayout.ts</c>;
+///     Canonical shared-memory float32 signal layout — the C# half of the
+///     shared-memory float32 signal contract. The TypeScript half is <c>src/Game.UI/Frontend/scenes/bufferLayout.ts</c>;
 ///     both files MUST stay in sync (indices, extras order, entity stride).
 ///
 ///     Every signal buffer starts with a six-float standard header:

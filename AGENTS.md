@@ -159,7 +159,7 @@ Summary of the scope an agent can search using this server:
   3. CLI & Command Line: Azure CLI (az), Azure Developer CLI (azd), PowerShell modules, Windows Terminal, WSL.
   4. SDKs: Azure SDKs across languages (Python, TypeScript, .NET, Java), Model Context Protocol (MCP) SDKs.
 
-- `docs/2d-games` and `docs/game-development` — game architecture and gamedev workflow references (see `docs/index.md`).
+- `docs/game-development` — game architecture and gamedev workflow references (see `docs/index.md`).
 - `docs/architecture/topology.md` — engine topology deep-dive (Implemented vs Target): three-layer runtime, WASM→JS bridge, physics, skeletal pipelines, domain matrix, ecosystem matrix, implementation status.
 - `docs/adr/` — Architecture Decision Records. Read before changing cross-boundary, physics, render-bridge, or asset-pipeline decisions.
 

@@ -9,7 +9,7 @@ namespace Game.Tests.Aot;
 
 /// <summary>
 ///     AOT/trim pattern checks for the engine dependency graph. The engine must stay
-///     publishable with NativeAOT + trimming (client WASM/server AOT targets, ADR-001).
+///     publishable with NativeAOT + trimming (client WASM/server AOT targets).
 ///     These tests assert the *patterns* that keep that possible: no runtime codegen
 ///     assemblies in the engine closure, no reflection-emit based dynamic proxies, and
 ///     blittable plain-data snapshot types.
@@ -74,7 +74,7 @@ public class EngineAotPatternTests
     [Test]
     public async Task Render_Signal_Records_Expose_Expected_Contract()
     {
-        // The batched-snapshot bridge contract (ADR-003): Seq + EntityCount + TickMs + Sprites.
+        // The batched-snapshot bridge contract: Seq + EntityCount + TickMs + Sprites.
         var signalProps = typeof(EcsRenderSignal).GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(p => p.Name).ToArray();
 

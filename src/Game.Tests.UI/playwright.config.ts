@@ -13,8 +13,7 @@ const chromeOverride = process.env.GAME_WEB_CHROME
  * Uses the installed Chrome (channel: 'chrome') — do NOT download bundled browsers.
  * The webServer boots the real host via `dotnet run`; set GAME_WEB_EXTERNAL_URL to
  * reuse an already-running instance instead.
- * Per-game renderer specs live in `archived-pixi-game-specs/` (out of testDir) until
- * the Babylon.js game renderers land.
+ * Per-game renderer specs land with the Babylon.js game renderers.
  */
 export default defineConfig({
   testDir: './tests',
