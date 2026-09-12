@@ -10,6 +10,7 @@ public sealed class SimHost : IDisposable
     private string? _activeGame;
 
     private EcsSimulation? _ecs;
+    private Transform3DEcsSimulation? _transform3d;
 
 
     private static DirectRenderTransport<T> CreateTransport<T>(
@@ -24,6 +25,9 @@ public sealed class SimHost : IDisposable
     public EcsSimulation Ecs => _ecs ??= new EcsSimulation(
         CreateTransport<EcsRenderSignal>("sprite-move", SignalBufferEncoders.FloatLength, SignalBufferEncoders.Encode, 128));
 
+    public Transform3DEcsSimulation Transform3D => _transform3d ??= new Transform3DEcsSimulation(
+        CreateTransport<Transform3DRenderSignal>("transform3d", SignalBufferEncoders.FloatLength, SignalBufferEncoders.Encode, 512));
+
     public void SetPaused(bool paused)
     {
         // Reserved for future use — per-game Pause/Resume is the active path.
@@ -33,11 +37,14 @@ public sealed class SimHost : IDisposable
     {
         lock (_sync)
         {
-            if (game == _activeGame) return;
+            // Always stop the active sim first: switching scenes pauses/unloads
+            // the previous simulation, and reloading the same scene restarts it.
             StopActiveLocked();
             switch (game)
             {
                 case "ecs": _ = Ecs; break;
+                case "transform3d": _ = Transform3D; break;
+                case "single-player": break;
                 default: break;
             }
             _activeGame = game;
@@ -50,6 +57,7 @@ public sealed class SimHost : IDisposable
         switch (_activeGame)
         {
             case "ecs": _ecs?.Dispose(); _ecs = null; WasmInterop.UnregisterBuffer("sprite-move"); break;
+            case "transform3d": _transform3d?.Dispose(); _transform3d = null; WasmInterop.UnregisterBuffer("transform3d"); break;
         }
         _activeGame = null;
     }
@@ -78,7 +86,7 @@ public sealed class SimHost : IDisposable
     {
         lock (_sync)
         {
-            _ecs?.Dispose();
-         }
+            StopActiveLocked();
+        }
     }
 }

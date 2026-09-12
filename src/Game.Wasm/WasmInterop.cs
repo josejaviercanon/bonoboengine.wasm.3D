@@ -8,9 +8,22 @@ namespace Game.Wasm;
 public static partial class WasmInterop
 {
     private static readonly Dictionary<string, PinnedRenderBuffer> _buffers = new();
+    private static readonly SimHost _simHost = new();
 
     internal static void Initialize()
     {
+    }
+
+    [JSExport]
+    internal static void ConnectGame(string game)
+    {
+        _simHost.Connect(game);
+    }
+
+    [JSExport]
+    internal static void SetPaused(bool paused)
+    {
+        _simHost.SetPaused(paused);
     }
 
     internal static void RegisterBuffer(string eventName, PinnedRenderBuffer buffer)
