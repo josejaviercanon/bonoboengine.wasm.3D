@@ -37,7 +37,7 @@ You should split your codebase into three distinct layers:
 
 1. **The Core Simulation Engine (Pure C#)** — a standard .NET Class Library. It knows absolutely nothing about graphics, rendering, or browsers.
    - *State Management:* manages coordinates, stats, pathfinding matrices, and entity maps.
-   - *The Deterministic Tick:* runs the Arch ECS systems each fixed step (e.g., `MovementSystem`, `ColorSystem`) and emits one **batched** render signal (`EcsRenderSignal`) per interval — not one event per entity — so the presentation layer mirrors authoritative state without per-frame interop. A `ProcessCommand` command pattern is the planned input boundary (ADR-003).
+   - *The Deterministic Tick:* runs the Arch ECS systems each fixed step (e.g., `MovementSystem`, `ColorSystem`) and emits one **batched** render signal (`EcsRenderSignal`) per interval — not one event per entity — so the presentation layer mirrors authoritative state without per-frame interop. A `ProcessCommand` command pattern is the planned input boundary.
 2. **The Presentation Layer (Babylon.js v9 + Tailwind)** — a pure mirror of your C# state.
    - *Tailwind UI:* DOM overlays for menus, inventories, and HUDs.
    - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array` over the WASM heap) and updates meshes/cameras per render frame — no per-entity interop calls.
@@ -53,7 +53,7 @@ Polling C# from JavaScript every frame, or serializing the whole state tree per 
 
 ## 🧬 Engine Topology: Simulation ↔ Presentation ↔ Render
 
-The Authoritative C# Architecture above splits the **Presentation Bridge** into two further layers at runtime, yielding a three-layer topology (ADR-001). C# is the sole authority; Babylon.js is a pure mirror that interpolates and renders.
+The Authoritative C# Architecture above splits the **Presentation Bridge** into two further layers at runtime, yielding a three-layer topology. C# is the sole authority; Babylon.js is a pure mirror that interpolates and renders.
 
 ```
 C# AUTHORITATIVE WORLD          Arch ECS + BepuPhysics2 (3D rigid-body authority)
@@ -63,15 +63,15 @@ BABYLON.JS v9                   meshes, thin instances, camera, particles, GPU
 ```
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
-- **Domain ownership (ADR-006):** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
-- **Bridge status:** zero-copy shared memory pipeline implemented (ADR-008): C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α` (ADR-003). Implementation guide (math, per-entity `InterpState` buffer): `docs/architecture/render-interpolation.md`.
-- **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`, wired into `Game.Engine` and used by `AsteroidsSimulation` as a 2D-plane world). The old Box2D.NET backend and box2d3-wasm presentation physics were removed (ADR-010/011).
-- **Skeletal animation:** glTF (`.glb`) is the asset contract, not the ECS architecture — two decoupled pipelines (authoring: AI+Blender→`.glb`; runtime: `.glb`→importer→ECS→Babylon.js); the animation state machine belongs to the ECS (ADR-004).
+- **Domain ownership:** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
+- **Bridge status:** zero-copy shared memory pipeline implemented: C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`. Implementation guide (math, per-entity `InterpState` buffer): `docs/architecture/render-interpolation.md`.
+- **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`, wired into `Game.Engine` and used by `AsteroidsSimulation` as a 2D-plane world). The old Box2D.NET backend and box2d3-wasm presentation physics were removed.
+- **Skeletal animation:** glTF (`.glb`) is the asset contract, not the ECS architecture — two decoupled pipelines (authoring: AI+Blender→`.glb`; runtime: `.glb`→importer→ECS→Babylon.js); the animation state machine belongs to the ECS.
 - **Layout sync (zero-copy guardrails):** the C# float32 layout (`SignalBufferLayout` + `SignalBufferEncoders` in `Game.Engine.ECS`) and the TypeScript decoders are kept in lockstep by `src/Game.Engine.Generators` — a Roslyn analyzer (`BNOBO001` stride mismatch, `BNOBO002` unsupported type) plus a source generator that emits `GeneratedSignalLayout` + a boot-time `[ModuleInitializer]` static assert and writes the generated `src/Game.UI/Frontend/scenes/generated/signalLayout.ts`. Mark every sprite-state struct with `[TypeScriptExport(floatStride)]`. The 3D transform layout (position + quaternion + scale) is a future ADR.
 
-Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/` (ADR-008…ADR-011).
+Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/`.
 
-**Single-player local is the default build (ADR-007).** `SINGLE_PLAYER_LOCAL` is the default C# compilation constant; `npm run build` produces a local-buffer bundle (`__RENDER_SOURCE__='local-buffer'`) with zero HTTP client code. Multiplayer is opt-in: build with `npm run build:web` + `/p:IsMultiplayer=true`.
+**Single-player local is the default build.** `SINGLE_PLAYER_LOCAL` is the default C# compilation constant; `npm run build` produces a local-buffer bundle (`__RENDER_SOURCE__='local-buffer'`) with zero HTTP client code. Multiplayer is opt-in: build with `npm run build:web` + `/p:IsMultiplayer=true`.
 
 ## 🛠️ Step-by-Step Blueprint for the MVP
 
@@ -99,81 +99,9 @@ public sealed class EcsSimulation : IDisposable
 }
 ```
 
-No per-entity `EntityMoved` events and no `IJSRuntime` calls from the engine: state leaves the simulation only as a batched render signal (the "Performance Gold Rule"; ADR-003 refines this toward `TransformSnapshot` + shared-memory).
+No per-entity `EntityMoved` events and no `IJSRuntime` calls from the engine: state leaves the simulation only as a batched render signal (the "Performance Gold Rule"; refines this toward `TransformSnapshot` + shared-memory).
 
-### Step 2: The Static-SSR Host + SSE Bridge (legacy blueprint — superseded by ADR-008/009)
-
-> The following SSR + SSE + Razor host is the **original** MVP blueprint. It was
-> replaced by the non-Blazor browser-wasm host (`Game.Wasm`, `[JSImport]`/`[JSExport]`,
-> pinned shared-memory buffer) in ADR-008/009. `Game.Web` and the Razor host no
-> longer exist in the repo; kept here only for historical context.
-
-`Game.Web` is **static SSR only** (no Interactive Server, no SignalR circuit). It registers `EcsSimulation` as a singleton, maps the Razor components (discovering shared RCL routes via `AddAdditionalAssemblies`), and exposes one SSE endpoint that streams the batched render signal. No `IJSRuntime` on the web host.
-
-```csharp
-// src/Game.Web/Program.cs
-builder.Services.AddRazorComponents();
-builder.Services.AddSingleton<EcsSimulation>();
-
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
-    .AddAdditionalAssemblies(typeof(GameView).Assembly)
-    .AddAdditionalAssemblies(typeof(ExamplesHome).Assembly);
-
-// SSE push of batched ECS render signals (no SignalR).
-app.MapGet("/api/ecs/stream", (EcsSimulation sim, HttpResponse response, CancellationToken ct) =>
-{
-    response.ContentType = "text/event-stream";
-    var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
-    var writeSync = new object();
-
-    Action<EcsRenderSignal> handler = signal =>
-    {
-        var json = JsonSerializer.Serialize(signal, jsonOptions);
-        lock (writeSync)
-        {
-            response.WriteAsync($"event: sprite-move\ndata: {json}\n\n").GetAwaiter().GetResult();
-        }
-    };
-
-    sim.OnRenderSignal += handler;
-
-    var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-    ct.Register(() =>
-    {
-        sim.OnRenderSignal -= handler;
-        completed.TrySetResult();
-    });
-    return completed.Task;
-});
-```
-
-The SSR page (`GameView.razor`) carries the initial payload to the client through a `data-message` attribute — no server circuit, no `IJSRuntime`:
-
-```razor
-@page "/hello"
-@using Game.Engine
-@implements IDisposable
-
-<div id="pixi-viewport" data-message="@Message" style="width:100%;height:100%;"></div>
-
-@code {
-    private readonly GameSimulation _simulation = new();
-    private string Message { get; set; } = "";
-
-    protected override void OnInitialized()
-    {
-        _simulation.OnRenderMessage += HandleRenderMessage;
-        _simulation.PublishHello();              // raises RenderMessageEvent → Message
-    }
-
-    private void HandleRenderMessage(RenderMessageEvent ev) => Message = ev.Message;
-
-    public void Dispose() => _simulation.OnRenderMessage -= HandleRenderMessage;
-}
-```
-
-### Step 3: The Babylon.js Scene (Zero-Copy Buffer Consumer) — current
+### Step 2: The Babylon.js Scene (Zero-Copy Buffer Consumer)
 
 `src/Game.UI/Frontend/game.ts` hosts the Babylon.js demo-balls scene (`initGame` — FreeCamera + collisions, CannonJS physics arena, amiga-textured spheres, shadow-casting directional light). The game examples and launch menu were removed; future simulations will map batched float32 snapshots from the pinned buffer onto mesh transforms via the shared-memory bridge. No game rules or boundary checks in JS.
 
@@ -207,7 +135,7 @@ source.addEventListener('sprite-move', (event) => {
 source.onerror = () => source.close();
 ```
 
-This is the deprecated SSE/JSON bridge (removed). The zero-copy shared memory pipeline (ADR-008) now replaces it: batched `TransformSnapshot` → pinned `GCHandle` buffer → `Float32Array` over WASM heap → client interpolation (ADR-003).
+This is the deprecated SSE/JSON bridge (removed). The zero-copy shared memory pipeline now replaces it: batched `TransformSnapshot` → pinned `GCHandle` buffer → `Float32Array` over WASM heap → client interpolation.
 
 ## 🚀 Future-Proofing for Authoritative Multiplayer
 
@@ -231,9 +159,7 @@ The architectural stack uses specialized, lightweight libraries designed for max
 
 When working with an MCP-capable AI agent:
 
-- **`docs/2d-games`** and **`docs/game-development`** — structured game design patterns, structural gamedev guides, and documentation contexts aligned with this engine's stack (Arch ECS simulation + Babylon.js presentation + Tailwind UI). They keep the agent anchored to professional game-loop conventions.
-  - `docs/2d-games` is the "Universal 2D Engine Toolkit" reference (kept for game-pattern guidance; 2D renderer specifics are superseded by the Babylon.js 3D migration).
-  - `docs/game-development` is the curated, engine-agnostic subset (concepts, programming, game design, project management, AI workflow).
+- **`docs/game-development`** — structured game design patterns, structural gamedev guides, and documentation contexts aligned with this engine's stack (Arch ECS simulation + Babylon.js presentation + Tailwind UI). They keep the agent anchored to professional game-loop conventions. Is the curated, engine-agnostic subset (concepts, programming, game design, project management, AI workflow).
   - `docs/game-entity-component-system/` mirrors the toolkit reorganized into `guides/` + `reference/` and carries the Bonobo-specific ECS rules (`bonobo-ECS-rules.md`).
 - **`net-microsoft-documentation` MCP server:** connects to Microsoft Learn via streamable HTTP, letting agents search documentation, fetch complete articles, and search code samples — trusted, up-to-date Microsoft knowledge ([source](https://learn.microsoft.com/en-us/training/support/mcp)).
 

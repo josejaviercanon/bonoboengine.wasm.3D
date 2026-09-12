@@ -37,7 +37,7 @@ To make this architecture work without destroying performance, you must isolate 
 1. **The Core Simulation Engine (Pure C#)** — a standard .NET Class Library. It knows absolutely nothing about graphics, rendering, or browsers.
    - *State Management:* manages coordinates, stats, pathfinding matrices, and entity maps.
    - *The Deterministic Tick:* runs the Arch ECS systems each fixed step and emits one **batched** render signal per interval — not one event per entity — so the presentation layer mirrors authoritative state without per-frame interop.
-   - *Physics:* `BepuPhysics2` (vendored at `src/bepuphysics2`, ADR-002/011). The asteroids sim runs a 2D-plane court inside the 3D solver (z-locked pose integrator), with contact filtering via a `CollidableProperty<int>` category matrix and begin-touch accumulation in `INarrowPhaseCallbacks`. Never pass a `ThreadDispatcher` to `Simulation.Timestep` on the browser host.
+   - *Physics:* `BepuPhysics2` (vendored at `src/bepuphysics2`). The asteroids sim runs a 2D-plane court inside the 3D solver (z-locked pose integrator), with contact filtering via a `CollidableProperty<int>` category matrix and begin-touch accumulation in `INarrowPhaseCallbacks`. Never pass a `ThreadDispatcher` to `Simulation.Timestep` on the browser host.
 2. **The Presentation Layer (Babylon.js v9 + Tailwind)** — a pure mirror of your C# state.
    - *Tailwind UI:* DOM overlays (menus, HUDs, inventory grids) on top of the canvas.
    - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array` over the WASM heap) and updates meshes/cameras per render frame — no per-entity interop calls.
@@ -56,13 +56,13 @@ BABYLON.JS v9                   meshes, thin instances, camera, particles, GPU
 ```
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
-- **Bridge status:** zero-copy shared memory pipeline implemented (ADR-008): C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α` (ADR-003).
+- **Bridge status:** zero-copy shared memory pipeline implemented: C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`.
 - **Domain ownership:** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
 - **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`).
 
-Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/` (ADR-008…ADR-011).
+Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/`.
 
-**Single-player local is the default build (ADR-007).** `SINGLE_PLAYER_LOCAL` is the default C# compilation constant; `npm run build` produces a local-buffer bundle (`__RENDER_SOURCE__='local-buffer'`) with zero HTTP client code. Multiplayer is opt-in: build with `npm run build:web` + `/p:IsMultiplayer=true`.
+**Single-player local is the default build.** `SINGLE_PLAYER_LOCAL` is the default C# compilation constant; `npm run build` produces a local-buffer bundle (`__RENDER_SOURCE__='local-buffer'`) with zero HTTP client code. Multiplayer is opt-in: build with `npm run build:web` + `/p:IsMultiplayer=true`.
 
 ## 🛠️ Current Iteration Status
 
@@ -98,7 +98,7 @@ src/
 ├── Game.Tests/             # xUnit v3 tests (determinism, ECS, snapshot shape)
 ├── Game.Tests.Aot/         # TUnit AOT/trim pattern tests
 ├── Game.Tests.UI/          # Playwright E2E suite (Node — not in the .NET solution)
-├── bepuphysics2/           # vendored C# physics library (authoritative, ADR-011)
+├── bepuphysics2/           # vendored C# physics library (authoritative)
 ├── Arch/ Arch.Generators/  # vendored ECS + source generator
 ├── BrainAI/                # vendored pathfinding/AI (unreferenced — target dependency)
 └── Temp/                   # upstream samples/demos (not part of the build/solution)
@@ -155,7 +155,7 @@ dotnet publish src/Game.Wasm -c Release   # RunAOTCompilation + WasmStripIL
 
 ### How to Build a Multiplayer (Server-Authoritative) Bundle
 
-The SSE/multiplayer transport is retained as an opt-in branch (ADR-007). Build
+The SSE/multiplayer transport is retained as an opt-in branch. Build
 the `sse` frontend transport and the server-authoritative constants:
 
 ```powershell
