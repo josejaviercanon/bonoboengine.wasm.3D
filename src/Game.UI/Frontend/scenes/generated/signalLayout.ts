@@ -25,3 +25,18 @@ export interface SpriteState {
 }
 export const SpriteStateStride = 6;
 
+export interface Transform3DState {
+    id: number;
+    x: number;
+    y: number;
+    z: number;
+    qx: number;
+    qy: number;
+    qz: number;
+    qw: number;
+    sx: number;
+    sy: number;
+    sz: number;
+}
+export const Transform3DStateStride = 11;
+

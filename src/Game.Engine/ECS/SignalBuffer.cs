@@ -43,6 +43,9 @@ public static class SignalBufferLayout
 {
     // ecs (sprite-move): no extras, SpriteState record (id, x, y, r, g, b).
     public const int EcsStride = 6;
+
+    // transform3d: no extras, Transform3DState record (id, xyz, quat xyzw, scale xyz).
+    public const int Transform3DStride = 11;
 }
 
 /// <summary>
@@ -74,6 +77,32 @@ public static class SignalBufferEncoders
                 dst[3] = sp.R;
                 dst[4] = sp.G;
                 dst[5] = sp.B;
+            });
+    }
+
+    // ---- 3D transforms (transform3d) --------------------------------------
+
+    public static int FloatLength(Transform3DRenderSignal s) =>
+        SignalBuffer.HeaderLength + s.States.Count * SignalBufferLayout.Transform3DStride;
+
+    public static void Encode(Transform3DRenderSignal s, Span<float> f)
+    {
+        SignalBuffer.WriteHeader(f, s.Seq, 0, s.States.Count,
+            SignalBufferLayout.Transform3DStride, (1d / 60d) * 1000d, s.TickMs);
+        WriteSprites(f, SignalBuffer.HeaderLength, s.States, SignalBufferLayout.Transform3DStride,
+            static (st, dst) =>
+            {
+                dst[0] = st.Id;
+                dst[1] = st.X;
+                dst[2] = st.Y;
+                dst[3] = st.Z;
+                dst[4] = st.Qx;
+                dst[5] = st.Qy;
+                dst[6] = st.Qz;
+                dst[7] = st.Qw;
+                dst[8] = st.Sx;
+                dst[9] = st.Sy;
+                dst[10] = st.Sz;
             });
     }
 

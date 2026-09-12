@@ -43,7 +43,7 @@
 ### FLOAT32_LAYOUT_SYNC
 
 * **Description:** The C# float32 signal layout (`SignalBufferLayout` strides in `Game.Engine.ECS.SignalBuffer.cs`) and the TypeScript decoders (`bufferLayout.ts` + per-scene `EntityDecoder`s) must never drift.
-* **Enforcement:** Mark every sprite-state record struct with `[TypeScriptExport(floatStride)]`. The `Game.Engine.Generators` project validates it three ways: a Roslyn analyzer errors on stride mismatch (`BNOBO001`) and unsupported field types (`BNOBO002`); an incremental source generator emits `GeneratedSignalLayout` + a `[ModuleInitializer]` static assert that cross-checks the computed stride against `SignalBufferLayout` at WASM boot; the same generator writes the TypeScript half to `src/Game.UI/Frontend/scenes/generated/signalLayout.ts`. `bufferLayout.ts` imports the generated constants — never hand-maintain stride numbers in two places. The 2D float layouts are unchanged during the Babylon migration; the 3D transform layout (position + quaternion + scale) is a future ADR.
+* **Enforcement:** Mark every sprite-state record struct with `[TypeScriptExport(floatStride)]`. The `Game.Engine.Generators` project validates it three ways: a Roslyn analyzer errors on stride mismatch (`BNOBO001`) and unsupported field types (`BNOBO002`); an incremental source generator emits `GeneratedSignalLayout` + a `[ModuleInitializer]` static assert that cross-checks the computed stride against `SignalBufferLayout` at WASM boot; the same generator writes the TypeScript half to `src/Game.UI/Frontend/scenes/generated/signalLayout.ts`. `bufferLayout.ts` imports the generated constants — never hand-maintain stride numbers in two places. The 3D transform layout (position + quaternion + scale) must used.
 
 ### ECS_PHYSICS_MAPPING
 
@@ -161,7 +161,6 @@ Summary of the scope an agent can search using this server:
 
 - `docs/game-development` — game architecture and gamedev workflow references (see `docs/index.md`).
 - `docs/architecture/topology.md` — engine topology deep-dive (Implemented vs Target): three-layer runtime, WASM→JS bridge, physics, skeletal pipelines, domain matrix, ecosystem matrix, implementation status.
-- `docs/adr/` — Architecture Decision Records. Read before changing cross-boundary, physics, render-bridge, or asset-pipeline decisions.
 
 ## Architectural Guardrails
 
@@ -265,7 +264,7 @@ MAUI builds require .NET MAUI workloads. Platform-specific target frameworks may
 - After touching `Game.UI` frontend assets, kill any running `Game.Wasm.exe` before rebuilding. 500s on `dist/*` (`game-bundle.js`, `app.css`) = stale/raced output from the `CopyGameUIAssets` MSBuild target; fix by killing the host and rebuilding (delete `src/Game.Wasm/bin`+`obj` if it persists).
 - `bin/`, `obj/`, `node_modules/`, and other build output are ignored. Do not commit them.
 - Trust `.csproj`, `.slnx`, `package.json`, and executable build output over setup prose in `README.md`.
-- `docs/index.md` describe architecture; `docs/ai-agents/codebase-truth.md` holds verified API facts; record significant decisions in `docs/adr/`.
+- `docs/index.md` describe architecture; `docs/ai-agents/codebase-truth.md` holds verified API facts; record significant.
 - **Bepu on WASM:** never pass a `ThreadDispatcher` to `Simulation.Timestep` (no thread pool in the browser). The asteroids sim enforces a 2D plane via the pose integrator (z-locked linear velocity + off-z angular velocity) and contact categories via a `CollidableProperty<int>` matrix.
 
 ## Agent Rules
