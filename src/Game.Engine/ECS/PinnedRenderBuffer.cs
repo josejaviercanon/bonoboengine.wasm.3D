@@ -1,10 +1,21 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Game.Engine.ECS;
 
-public sealed class PinnedRenderBuffer : IDisposable
+/// <summary>
+///     Zero-copy render buffer: a pinned managed array (<typeparamref name="T"/> =
+///     <c>float</c> or <c>double</c>) whose address is handed to the presentation layer.
+///     The WASM host projects a <c>Float32Array</c>/<c>Float64Array</c> over the heap at
+///     <see cref="Ptr"/>; the WinApp host memcpy's the same span into a WebView2 shared
+///     buffer. Growing the buffer re-pins (the pointer changes), so consumers must always
+///     read the pointer passed with the notification — never cache it.
+/// </summary>
+/// <typeparam name="T">Blittable scalar element type of the signal buffer.</typeparam>
+public sealed class PinnedRenderBuffer<T> : IDisposable
+    where T : unmanaged
 {
-    private float[] _buffer;
+    private T[] _buffer;
     private GCHandle _handle;
     private Action<string>? _notify;
 
@@ -12,18 +23,24 @@ public sealed class PinnedRenderBuffer : IDisposable
 
     public PinnedRenderBuffer(int initialCapacity)
     {
-        _buffer = new float[initialCapacity];
+        _buffer = new T[initialCapacity];
         _handle = GCHandle.Alloc(_buffer, GCHandleType.Pinned);
     }
 
+    /// <summary>Address of the pinned array; valid until the next growth or dispose.</summary>
     public IntPtr Ptr => _handle.AddrOfPinnedObject();
-    public int FloatCount { get; private set; }
 
-    public Span<float> GetSpan(int floatCount)
+    /// <summary>Number of elements written by the last <see cref="GetSpan"/> call.</summary>
+    public int ElementCount { get; private set; }
+
+    /// <summary>Size in bytes of one element (4 for float, 8 for double).</summary>
+    public int ElementSize => Unsafe.SizeOf<T>();
+
+    public Span<T> GetSpan(int elementCount)
     {
-        EnsureCapacity(floatCount);
-        FloatCount = floatCount;
-        return _buffer.AsSpan(0, floatCount);
+        EnsureCapacity(elementCount);
+        ElementCount = elementCount;
+        return _buffer.AsSpan(0, elementCount);
     }
 
     public void Commit(string eventName)
@@ -36,7 +53,7 @@ public sealed class PinnedRenderBuffer : IDisposable
         if (needed <= _buffer.Length) return;
         _handle.Free();
         var newSize = Math.Max(needed, _buffer.Length * 2);
-        _buffer = new float[newSize];
+        _buffer = new T[newSize];
         _handle = GCHandle.Alloc(_buffer, GCHandleType.Pinned);
     }
 

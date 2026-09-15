@@ -1,4 +1,4 @@
-# Architecture Topology — C# ECS Engine in browser-wasm Native-AOT Host (Babylon.js v9)
+# Architecture Topology — C# ECS Engine in Native-AOT Hosts: browser-wasm + WinUI 3/WebView2 (Babylon.js v9)
 
 > Detailed companion to `docs/index.md` (the architecture source of truth). Decisions live in `docs/adr/`; verified facts in `docs/ai-agents/codebase-truth.md`. This file marks **Implemented** vs **Target** explicitly. When code and prose disagree, verified files win.
 
@@ -15,10 +15,10 @@ C# ECS Engine Core (Arch + BepuPhysics2)
    |  native logic / systems                 |  fixed-step physics (BepuPhysics2)
    v                                         v
 C# Transform & Motion Systems (contiguous)   C# Physics Engine (BepuPhysics2, single-threaded)
-   |  zero-copy / direct HEAPF32 transfer
+   |  zero-copy / direct HEAPF32/HEAPF64 transfer (browser) or shared buffer (desktop)
    v
-=============== WASM Interop Boundary (memory HEAP) ===============
-   |  batched render snapshot / matrix buffer
+=== WASM Interop Boundary (HEAPF32/F64) / WebView2 shared buffer ===
+   |  batched render snapshot / transform buffer
    v
 Babylon.js v9 Presentation Layer (WebGL2 / WebGPU pipelines)
    |-- meshes |-- thin instances |-- cameras |-- PBR |-- glTF 2.0 (target)
@@ -30,31 +30,33 @@ Babylon.js v9 Presentation Layer (WebGL2 / WebGPU pipelines)
 | --- | --- | --- |
 | **1. C# Authoritative World** | ECS + BepuPhysics2; gameplay physics, collisions, rules, deterministic tick. Sole authority. | Arch ECS implemented (`EcsSimulation` 60 Hz, `MovementSystem`/`ColorSystem`, batched `EcsRenderSignal`, SSR `Snapshot()`; games: Snake, Tetris, Breakout, Asteroids, Pacman, Racer). BepuPhysics2 **wired** into `Game.Engine` and used by `AsteroidsSimulation` as the authoritative physics world (sphere bodies, sub-stepped solves, contact filtering via `CollidableProperty<int>` matrix, begin-touch accumulation in `INarrowPhaseCallbacks`, screen wrap, deterministic single-threaded `Timestep` with null `ThreadDispatcher`). |
 | **2. Presentation World** | Client-side interpolation between authoritative snapshots (default). Pure mirror of authoritative state. | Interpolation math implemented in the shared-buffer decoders (`SnapshotBuffer`); per-game Babylon renderers that consume the buffers are **Target**. |
-| **3. Babylon.js v9** | Meshes, thin instances, cameras, lights, materials, particles, GPU render. | Main-page demo scene implemented (`initGame` in `Frontend/game.ts`: FreeCamera + collisions, CannonJS physics arena, amiga-textured spheres, shadow-casting directional light). The shared-memory bridge stays for future simulations. |
+| **3. Babylon.js v9** | Meshes, thin instances, cameras, lights, materials, particles, GPU render. | Main-page demo scene implemented (`initGame` in `Frontend/game.ts`: FreeCamera + collisions, CannonJS physics arena, amiga-textured spheres, shadow-casting directional light) plus the ECS scene (mesh pool driven by the float64 `transform3d` buffer). The same bundle is host-agnostic and runs under `Game.Wasm` and `Game.WinApp`. |
 
 Rule: never move simulation back-and-forth through JS interop every frame. The simulation writes batched snapshots into shared memory; Babylon reads them at render-frame rate. Client-side interpolation implementation guide: `docs/architecture/render-interpolation.md`.
 
-## The WASM->JS Bridge
+## The C#↔JS Bridge (WASM heap + WebView2 shared memory)
 
 **Problem:** per-entity interop at 60 FPS saturates the boundary; simulation (60 Hz) and display (144 Hz) differ in time domain -> jitter.
 
-**Implemented:** zero-copy shared-memory pipeline. The simulation writes each batched render snapshot into a pinned `float[]` (`GCHandle.Alloc(..., Pinned)`), passes the raw pointer to JS via `[JSImport]("notifyRender")`, and JS reads `new Float32Array(heap.buffer, ptr, count)` over the WASM heap — no JSON, no byte[] copy, no `IJSRuntime`. Client interpolates: `P_render = P_prev + (P_curr - P_prev) * alpha`, `alpha = (T_now - T_last_tick) / T_tick`.
+**Implemented (browser host):** zero-copy shared-memory pipeline. The simulation writes each batched render signal into a pinned `float[]`/`double[]` (`GCHandle.Alloc(..., Pinned)`), passes the raw pointer to JS via `[JSImport]("notifyRender")` with the element count and scalar size, and JS reads `new Float32Array/Float64Array(heap.buffer, ptr, count)` over the WASM heap (`localHeapViewF32()`/`localHeapViewF64()`) — no JSON, no byte[] copy, no `IJSRuntime`. Client interpolates: `P_render = P_prev + (P_curr - P_prev) * alpha`, `alpha = (T_now - T_last_tick) / T_tick`.
+
+**Implemented (desktop host):** the same pinned buffer is copied into a `CoreWebView2SharedBuffer` and posted with `PostSharedBufferToScript(..., ReadOnly, {channel, seq, elementCount, scalarSize})`; the page receives `sharedbufferreceived`, wraps the mapping in a `Float64Array`, dispatches synchronously and releases it (`chrome.webview.releaseBuffer`). Details: `docs/architecture/desktop-webview2.md`.
 
 **Deprecated:** `GET /api/ecs/stream` SSE pushing `event: sprite-move` with batched `SpriteState[]` JSON — the legacy transport, superseded by the pinned-buffer path (retained only in the opt-in multiplayer `--mode web` / `npm run build:web` build).
 
-The canonical float32 layout lives in `Game.Engine.ECS.SignalBuffer.cs` (`SignalBuffer` + `SignalBufferLayout` + `SignalBufferEncoders`). The C# and TS halves are kept in lockstep by `src/Game.Engine.Generators` — see "Zero-Copy Layout Guardrails" below. The 3D transform layout (position + quaternion + scale) is a future design; the current float layouts remain 2D-shaped until the game renderers land.
+The canonical layout lives in `Game.Engine.ECS.SignalBuffer.cs` (`SignalBuffer` + `SignalBufferLayout` + `SignalBufferEncoders`): a six-element header (`seq, epoch, entityCount, stride, stepMs, tickMs`) + entity records, with a per-signal scalar type — `sprite-move` is float32 (`SpriteState`, stride 6), `transform3d` is float64 (`Transform3DState`, stride 11: id + position + quaternion + scale). The C# and TS halves are kept in lockstep by `src/Game.Engine.Generators` — see "Zero-Copy Layout Guardrails" below.
 
 ## Zero-Copy Layout Guardrails
 
-The C# float32 layout and the TypeScript decoders must never drift. `src/Game.Engine.Generators` (Roslyn analyzer + source generator) enforces this three ways:
+The C# layout and the TypeScript decoders must never drift. `src/Game.Engine.Generators` (Roslyn analyzer + source generator) enforces this three ways:
 
 | Vector | Phase | Mechanism |
 | --- | --- | --- |
-| Stride / type validation | Compile-time (IDE + MSBuild) | `LayoutAlignmentAnalyzer` — `BNOBO001` errors when a `[TypeScriptExport(n)]` struct's computed float-stride ≠ `n`; `BNOBO002` errors on field types that cannot float32-encode. |
-| Boot-time static assert | Load-time (WASM boot) | `TypeScriptInterfaceGenerator` emits `GeneratedSignalLayout` + a `[ModuleInitializer]` that asserts each computed stride equals the matching `SignalBufferLayout` constant. |
-| TypeScript half | Build-time | The same generator writes `src/Game.UI/Frontend/scenes/generated/signalLayout.ts` (interfaces + stride constants). |
+| Stride / type validation | Compile-time (IDE + MSBuild) | `LayoutAlignmentAnalyzer` — `BNOBO001` errors when a `[TypeScriptExport(n)]` struct's computed element-stride ≠ `n`; `BNOBO002` errors on field types that cannot signal-encode; `BNOBO003` warns on 64-bit integers inside float64 structs. |
+| Boot-time static assert | Load-time (WASM boot + WinApp startup) | `TypeScriptInterfaceGenerator` emits `GeneratedSignalLayout` (`*Stride`, `*ScalarSize`, `*ByteLength`) + a `[ModuleInitializer]` that asserts each computed value equals the matching `SignalBufferLayout` constant. |
+| TypeScript half | Build-time | The same generator writes `src/Game.UI/Frontend/scenes/generated/signalLayout.ts` (`ScalarArray`, `ScalarSizes`, interfaces + stride/scalar constants). |
 
-Every sprite-state record struct carries the marker (e.g. `SpriteState`, stride 6).
+Every render-state record struct carries the marker with its precision (`SpriteState` → `[TypeScriptExport(6, Precision = ScalarPrecision.Float32)]`; `Transform3DState` → `[TypeScriptExport(11, Precision = ScalarPrecision.Float64)]`).
 
 ## Physics Architecture
 
@@ -122,12 +124,14 @@ The Babylon.js v9 stack is declared in `src/Game.UI/package.json`: `@babylonjs/c
 | Arch ECS sim (60 Hz, systems, batched signal) | Implemented |
 | Babylon.js main page scene (`initGame`, canvas, FreeCamera + CannonJS arena, amiga spheres) | Implemented (main page) |
 | BepuPhysics2 authoritative physics in ECS loop (Asteroids: sphere bodies, contact events, wrap, 2D plane) | Implemented |
-| Per-game Babylon renderers (buffer consumers, thin instances) | Target |
-| 3D transform float32 layout (position + quaternion + scale) | Target |
+| Per-game Babylon renderers (buffer consumers, thin instances) | Partial: `sceneECS` consumes the float64 `transform3d` buffer into a mesh pool; thin instances + per-game scenes are Target |
+| 3D transform layout (position + quaternion + scale, `Transform3DState`) | Implemented — float64 (`Float64Array`), stride 11, validated by `Game.Engine.Generators` |
 | Render transport seam: `IRenderTransport<TSignal>` injected into all sims, `ServerRenderTransport` default, `SINGLE_PLAYER_LOCAL` build switches in `Game.Engine.csproj` | Implemented |
 | Single-player-local default: `SINGLE_PLAYER_LOCAL` + `local-buffer` are the default builds; `fetch` POST exists only in the `--mode web` / `npm run build:web` multiplayer branch | Implemented |
-| `Game.Wasm` co-located host: `PinnedRenderBuffer` + `DirectRenderTransport` (zero-copy: pinned `GCHandle` → `[JSImport] notifyRender(ptr, count)` → JS reads `Float32Array` over WASM heap), typed `[JSExport]` commands, `WasmInterop` bridge module (`wasm-interop.js`). | Implemented |
-| example interfaces game scene or simulation `IExampleSims` seam — `SimHost` provides lazy sims in `Game.Wasm` | |
+| `Game.Wasm` co-located host: `PinnedRenderBuffer<T>` + `DirectRenderTransport<TSignal, T>` (zero-copy: pinned `GCHandle` → `[JSImport] notifyRender(ptr, count, scalarSize)` → JS reads `Float32Array`/`Float64Array` over the WASM heap), typed `[JSExport]` commands, `wasm-interop.js` provider. | Implemented |
+| `Game.WinApp` desktop host (WinUI 3 + WebView2 + Native AOT): same `SimulationHost`, `SharedBufferChannel` (`CreateSharedBuffer` + `PostSharedBufferToScript`) → page `Float64Array` view, `webview-bridge.js` provider, unpackaged self-contained Release publish | Implemented |
+| Host-agnostic `Game.Engine.ECS.SimulationHost` — lazy `EcsSimulation`/`Transform3DEcsSimulation`, pinned buffers, `BufferNotify(eventName, ptr, elementCount, scalarSize)` | Implemented |
 | `Game.Wasm` Release AOT publish — `RunAOTCompilation` + `WasmStripIL`, vendored Arch generic templates capped at arity 15 (`Helpers.ttinclude` `Amount=16`); `[JSImport]/[JSExport]` source-gen interop (AOT-safe, no reflection) | Implemented |
+| `Game.WinApp` Release AOT publish (`PublishAot`, `WindowsPackageType=None`, self-contained; `PublishReadyToRun` disabled under AOT) | Implemented |
 | Interop hygiene — `WasmInterop.Initialize` in `Program.cs`, `babylon-bundle-ready` event handshake, no `DotNetObjectReference`/`CommandJsonContext` | Implemented |
-| Zero-copy layout guardrails — `Game.Engine.Generators`: `[TypeScriptExport]` stride analyzer (`BNOBO001`/`BNOBO002`) + `GeneratedSignalLayout` `[ModuleInitializer]` assert + generated `signalLayout.ts` | Implemented |
+| Zero-copy layout guardrails — `Game.Engine.Generators`: `[TypeScriptExport]` stride/scalar analyzer (`BNOBO001`/`BNOBO002`/`BNOBO003`) + `GeneratedSignalLayout` `[ModuleInitializer]` assert + generated `signalLayout.ts` | Implemented |

@@ -1,20 +1,20 @@
 # Agent Directives: bonoboengine.wasm.3D Architecture
 
-**Directive:** Agents must never implement per-entity draw calls, individual DOM queries, or inefficient JSON string serialization loops for 3D rendering. All high-frequency 3D transformation data must utilize zero-copy memory buffers, mapping pinned C# transform structures directly to Babylon.js mesh transforms via a single `Float32Array` view over the WebAssembly heap.
+**Directive:** Agents must never implement per-entity draw calls, individual DOM queries, or inefficient JSON string serialization loops for 3D rendering. All high-frequency 3D transformation data must utilize zero-copy memory buffers, mapping pinned C# transform structures directly to Babylon.js mesh transforms via a single `Float32Array`/`Float64Array` view — over the WebAssembly heap (`localHeapViewF32/F64`) in the browser host, or over a WebView2 shared buffer (`PostSharedBufferToScript`) in the desktop host.
 
-**Directive:** Agents must never serialize entity transform states into JSON, UTF-8 strings, or managed array clones during high-frequency execution loops. All spatial coordinates, velocities, and rotation data must cross the WASM-JS boundary using raw, pinned memory pointers or shared memory buffers exported by C# interop.
+**Directive:** Agents must never serialize entity transform states into JSON, UTF-8 strings, or managed array clones during high-frequency execution loops. All spatial coordinates, velocities, and rotation data must cross the C#↔JS boundary using raw, pinned memory pointers or shared memory buffers exported by C# interop.
 
 ---
 
 ## Project Context
 
 * **Language:** C# 14 / .NET
-* **Framework:** .NET MAUI / WASM Native AOT
+* **Framework:** .NET MAUI / WASM Native AOT / WinUI 3 + WebView2 (Windows desktop)
 * **ECS Backend:** Arch ECS (Pure C# zero-allocation component architecture)
 * **Physics Backend:** `BepuPhysics2` (Authoritative 3D simulation loop, deterministic single-threaded on the browser-wasm host)
 * **Render Frontend:** Babylon.js v9 (3D WebGL2/WebGPU canvas renderer)
 * **UI Overlay:** Tailwind CSS + Vite + TypeScript
-* **Target Environment:** Native AOT / WebAssembly (WASM)
+* **Target Environment:** Native AOT / WebAssembly (WASM) + Native AOT / win-x64 (WinApp)
 
 ---
 
@@ -32,18 +32,21 @@
 
 ### ZERO_COPY_INTEROP_MANDATE
 
-* **Description:** Single-player and local-buffer rendering states must cross the WebAssembly-JS boundary using zero-copy pinned memory buffers.
-* **Enforcement:** Allocate transformation buffers using `GCHandle.Alloc(..., GCHandleType.Pinned)` in C# and project a `Float32Array` view over `WebAssembly.Memory.buffer` in TypeScript to update Babylon mesh transforms without garbage collection overhead.
+* **Description:** Single-player and local-buffer rendering states must cross the C#↔JS boundary using zero-copy pinned memory buffers on every host.
+* **Enforcement:** Allocate transformation buffers using `GCHandle.Alloc(..., GCHandleType.Pinned)` in C# (`PinnedRenderBuffer<T>`, `T` = `float` or `double`) and expose the same memory to script:
+  * **Game.Wasm (browser):** project a `Float32Array`/`Float64Array` view over `localHeapViewF32()`/`localHeapViewF64()` in `js/wasm-interop.js`; never re-encode or copy.
+  * **Game.WinApp (desktop):** write the pinned span into a `CoreWebView2SharedBuffer` and call `PostSharedBufferToScript(..., ReadOnly, metadata)`; script reads the same mapping as `Float64Array` via `sharedbufferreceived` and calls `chrome.webview.releaseBuffer` after dispatch. Note: `PostWebMessageAsArrayBuffer` does **not** exist in the WebView2 API surface.
+  * Never JSON-serialize transforms, never clone arrays, never make per-entity interop calls.
 
 ### BABYLON_MESH_TRANSFORM_ALIGNMENT
 
 * **Description:** Babylon.js v9 entity rendering must be driven by batched transform signals or shared-memory float arrays rather than per-entity JavaScript interop calls.
 * **Enforcement:** Ensure C# 3D transform structures (`X`, `Y`, `Z`, rotation quaternion, `ScaleX/Y/Z`) align with Babylon mesh expectations. Update mesh positions/rotations in batch loops synchronized with render frames. Use `Mesh.instantiate` / thin instances (`thinInstanceSetBuffer`) for large entity counts (see `.agents/skills/babylonjs`).
 
-### FLOAT32_LAYOUT_SYNC
+### FLOAT_LAYOUT_SYNC
 
-* **Description:** The C# float32 signal layout (`SignalBufferLayout` strides in `Game.Engine.ECS.SignalBuffer.cs`) and the TypeScript decoders (`bufferLayout.ts` + per-scene `EntityDecoder`s) must never drift.
-* **Enforcement:** Mark every sprite-state record struct with `[TypeScriptExport(floatStride)]`. The `Game.Engine.Generators` project validates it three ways: a Roslyn analyzer errors on stride mismatch (`BNOBO001`) and unsupported field types (`BNOBO002`); an incremental source generator emits `GeneratedSignalLayout` + a `[ModuleInitializer]` static assert that cross-checks the computed stride against `SignalBufferLayout` at WASM boot; the same generator writes the TypeScript half to `src/Game.UI/Frontend/scenes/generated/signalLayout.ts`. `bufferLayout.ts` imports the generated constants — never hand-maintain stride numbers in two places. The 3D transform layout (position + quaternion + scale) must used.
+* **Description:** The C# signal layout (`SignalBufferLayout` strides + scalar sizes in `Game.Engine.ECS.SignalBuffer.cs`) and the TypeScript decoders (generated `Frontend/scenes/generated/signalLayout.ts` + per-scene `EntityDecoder`s) must never drift.
+* **Enforcement:** Mark every render-state record struct with `[TypeScriptExport(elementStride)]`, declaring `Precision = ScalarPrecision.Float32` (default, 4-byte elements, e.g. `SpriteState`) or `ScalarPrecision.Float64` (8-byte elements, e.g. `Transform3DState`). The `Game.Engine.Generators` project validates it three ways: a Roslyn analyzer errors on stride mismatch (`BNOBO001`) and unsupported field types (`BNOBO002`), warns on 64-bit integers in float64 structs (`BNOBO003`); an incremental source generator emits `GeneratedSignalLayout` (`*Stride`, `*ScalarSize`, `*ByteLength`) + a `[ModuleInitializer]` static assert that cross-checks them against `SignalBufferLayout` at boot (WASM and WinApp); the same generator writes the TypeScript half (`ScalarArray`, `ScalarSizes`, per-struct strides/scalar sizes). Never hand-maintain stride or scalar-size numbers anywhere else. The 3D transform layout (position + quaternion + scale, `Transform3DState`) must be used for 3D entities.
 
 ### ECS_PHYSICS_MAPPING
 
@@ -84,7 +87,7 @@ The engine separates performance-critical simulation logic from presentation and
 To minimize serialization latency and prevent garbage collection pressure across the WebAssembly boundary, all communication must adhere to strict rules:
 
 * **Zero polling rule:** Polling state across the interop boundary per frame via JSON or string serialization is strictly prohibited. Communication must be **event-driven, shared-memory bound, or streamed via batched deltas**.
-* **Shared-heap transform bridge:** High-frequency transform updates occur with zero interop overhead by allowing JavaScript `Float32Array` views to read pinned C# transform buffers directly from the WASM memory heap.
+* **Shared-heap transform bridge:** High-frequency transform updates occur with zero interop overhead by allowing JavaScript `Float32Array`/`Float64Array` views to read pinned C# transform buffers directly from the WASM memory heap (`localHeapViewF32/F64`), or from a WebView2 shared buffer on desktop.
 * **Primitive-first events:** Low-frequency events (e.g., UI interactions, entity spawning) must only pass primitive types (`int`, `float`, `bool`) using `[JSImport]` and `[JSExport]`.
 
 ---
@@ -128,7 +131,7 @@ public static void MainLoopTick(float deltaTime)
 | **Simulation & Physics** | C# (Arch ECS / BepuPhysics2 / .NET WASM) | Game rules, entity states, 3D rigid body collisions and dynamics. | Locked to target tick rate (e.g., 60 Hz fixed timestep). |
 | **Graphics Pipeline** | TypeScript (Babylon.js v9 / WebGL2 / WebGPU) | Mesh rendering, scene graph, cameras, particles. | Frame-synchronized with browser `requestAnimationFrame`. |
 | **Complex UI Layer** | Tailwind CSS / Vite / TypeScript | Menus, HUDs, inventory grids, configuration panels. | Event-driven (DOM-rendered on demand). |
-| **Shared Memory Bridge** | Pinned `GCHandle` & `Float32Array` view | Zero-copy 3D transform and coordinate synchronization. | Direct memory read per render frame. |
+| **Shared Memory Bridge** | Pinned `GCHandle` & `Float32Array`/`Float64Array` view | Zero-copy 3D transform and coordinate synchronization (WASM heap view; WebView2 shared buffer on desktop). | Direct memory read per render frame. |
 
 ---
 
@@ -136,11 +139,14 @@ public static void MainLoopTick(float deltaTime)
 
 - `bonoboWebGame.slnx` is the solution; projects target .NET 10.
 - `src/Game.Engine` is a plain C# class library. Keep engine logic independent of UI and platform code. It hosts the Arch ECS (`Game.Engine.ECS`: components, `[Query]` systems, `EcsSimulation`) via vendored `src/Arch` + `src/Arch.Generators` (analyzer only), and the BepuPhysics2 physics world (`AsteroidsContext` → `Simulation`).
-- `src/Game.Engine.Generators` is a Roslyn analyzer + source generator project (netstandard2.0, referenced by `Game.Engine` via `OutputItemType="Analyzer" ReferenceOutputAssembly="false"`). It enforces the zero-copy float32 layout contract: the `[TypeScriptExport]` marker attribute, the `LayoutAlignmentAnalyzer` (BNOBO001 stride mismatch / BNOBO002 unsupported field type), and the `TypeScriptInterfaceGenerator` which emits `GeneratedSignalLayout` + a `[ModuleInitializer]` boot-time static assert cross-checking `SignalBufferLayout`, plus the TypeScript half (`src/Game.UI/Frontend/scenes/generated/signalLayout.ts`). See the `FLOAT32_LAYOUT_SYNC` rule.
-- `src/Game.UI` is a shared class library (non-Razor, plain `Microsoft.NET.Sdk`). It references `Game.Engine` and owns the Babylon.js frontend source (Vite + Tailwind + TypeScript) and static assets (audio, backgrounds). Built via `npm run build` in its folder.
+- `src/Game.Engine.Generators` is a Roslyn analyzer + source generator project (netstandard2.0, referenced by `Game.Engine` via `OutputItemType="Analyzer" ReferenceOutputAssembly="false"`). It enforces the zero-copy signal layout contract: the `[TypeScriptExport]` marker attribute (with `ScalarPrecision`), the `LayoutAlignmentAnalyzer` (BNOBO001 stride mismatch / BNOBO002 unsupported field type / BNOBO003 wide integers), and the `TypeScriptInterfaceGenerator` which emits `GeneratedSignalLayout` (`*Stride`, `*ScalarSize`, `*ByteLength`) + a `[ModuleInitializer]` boot-time static assert cross-checking `SignalBufferLayout`, plus the TypeScript half (`src/Game.UI/Frontend/scenes/generated/signalLayout.ts`). See the `FLOAT_LAYOUT_SYNC` rule.
+- `src/Game.UI` is a shared class library (non-Razor, plain `Microsoft.NET.Sdk`). It references `Game.Engine` and owns the Babylon.js frontend source (Vite + Tailwind + TypeScript) and static assets (audio, backgrounds). Built via `npm run build` in its folder. Its generated `wwwroot/dist` and the host-side copies of `dist`/`audio`/`games`/`background.png` are **gitignored** (see `Game.UIAssets.targets`).
+- `src/Game.UI/Game.UIAssets.targets` is the shared MSBuild asset pipeline imported by both hosts. It prunes + copies the Vite/Tailwind output, fails fast when the bundle is missing, and supports `-p:BuildFrontend=true` (runs `npm run build` first). Hosts pick a mode: `ProjectWwwroot` (Game.Wasm — pre-build copy into the project's wwwroot) or `OutputFolder` (Game.WinApp — copy into `$(OutDir)wwwroot` before Build and mirror into `$(PublishDir)wwwroot` after Publish; WinUI `Content` globs are evaluated at project load, so target-time copies are the only reliable path).
 - `src/Game.Tests` is the xUnit v3 test project (determinism self-checks, ECS unit tests, snapshot shape). `src/Game.Tests.Aot` is the TUnit test project (AOT/trim pattern checks over the `Game.Engine` closure). Both are in the solution and run under the Microsoft.Testing.Platform runner opted in via root `global.json` — do not delete that file or `dotnet test` misbehaves on .NET 10.
 - `src/Game.Tests.UI` is the Node/TypeScript Playwright E2E suite. Not a `.csproj` — run from its folder via npm. Default browser channel is installed Chrome (`channel: 'chrome'`); machines without a system Chrome build can point at a Playwright chromium via `GAME_WEB_CHROME` (see `playwright.config.ts`). Config and host setup: see `docs/testing-ui-E2E/index.md`. `home.spec.ts` asserts the Babylon demo-balls scene (canvas + WebGL2 + drawn pixels).
-- `src/Game.Wasm` is the browser-wasm host (non-Blazor, `Microsoft.NET.Sdk.WebAssembly`). Implements the `[JSImport]`/`[JSExport]` interop bridge with pinned shared memory buffer (`PinnedRenderBuffer`) via `WasmInterop`, and the Babylon provider (wasm-interop.js module). Bootstraps via direct `import { dotnet } from './_framework/dotnet.js'` (no `blazor.webassembly.js`). No game sims are hosted (the game examples were removed); the bridge stays for future simulations.
+- `src/Game.Wasm` is the browser-wasm host (non-Blazor, `Microsoft.NET.Sdk.WebAssembly`). Implements the `[JSImport]`/`[JSExport]` interop bridge with pinned shared memory buffer (`PinnedRenderBuffer<T>`) via `WasmInterop`, and the Babylon provider (wasm-interop.js module). Bootstraps via direct `import { dotnet } from './_framework/dotnet.js'` (no `blazor.webassembly.js`). No game sims are hosted (the game examples were removed); the bridge stays for future simulations.
+- `src/Game.WinApp` is the Windows desktop host: WinUI 3 (Windows App SDK) + WebView2 + **Native AOT** (`PublishAot`, unpackaged/self-contained in Release). It references `Game.Engine` and runs the same ECS/Bepu simulation in-process, then publishes committed buffers to the page through WebView2 **shared buffers** (`SharedBufferChannel`: `CreateSharedBuffer` + `PostSharedBufferToScript`). The page shell is `wwwroot/index.html` + `wwwroot/js/webview-bridge.js`; the Babylon bundle itself is host-agnostic. Publish: `dotnet publish src/Game.WinApp/Game.WinApp.csproj -c Release -r win-x64 -p:Platform=x64`. See `docs/architecture/desktop-webview2.md`.
+- `src/Game.Engine.ECS.SimulationHost` is the host-agnostic simulation control (lazily creates `EcsSimulation`/`Transform3DEcsSimulation`, owns the pinned buffers, exposes `Connect`/`SetPaused` and a `BufferNotify(eventName, nint ptr, elementCount, scalarSize)` callback). Both hosts construct it with their own delivery mechanism — the browser host forwards to `notifyRender` (heap view; pointer narrowed to `int` for the 32-bit WASM heap), WinApp to the shared-buffer channel. Keep the pointer host-width (`nint`): truncating it to `int` crashes the native x64 AOT process.
 
 - `src/bepuphysics2` is a **vendored** C# physics library (BepuPhysics2, Apache-2.0), **referenced** by `Game.Engine.csproj` as the authoritative physics world: `BepuPhysics` + `BepuUtilities` (net10.0, `CommonSettings.props`). Deterministic single-threaded solves (null `ThreadDispatcher`). `src/BrainAI` (pathfinding/AI) remains vendored but **unreferenced** — treat as a target dependency, not active. `src/Temp/` holds upstream samples/demos — not part of the build/solution.
 - The Babylon.js v9 ecosystem (`@babylonjs/core`) is declared in `src/Game.UI/package.json`.
@@ -173,7 +179,7 @@ Summary of the scope an agent can search using this server:
 | Guardrail Category | Status | Architectural Impact of the New Interop Layer |
 | --- | --- | --- |
 | **C# Authority & ECS / BepuPhysics2** | **Valid** | C# remains the sole authoritative simulation engine using Arch ECS and `BepuPhysics2`. Game logic and physics simulation are never executed in JavaScript. |
-| **Transport Layer (`fetch` POST / SSE Streams)** | **Superseded** | The legacy SSE stream (`/api/ecs/stream` pushing JSON `SpriteState[]`) and HTTP POST render bridges are deprecated for rendering. They are replaced by direct, zero-copy `Float32Array` views over the WASM memory heap. |
+| **Transport Layer (`fetch` POST / SSE Streams)** | **Superseded** | The legacy SSE stream (`/api/ecs/stream` pushing JSON `SpriteState[]`) and HTTP POST render bridges are deprecated for rendering. They are replaced by direct, zero-copy `Float32Array`/`Float64Array` views over the WASM memory heap (browser) and WebView2 shared buffers (desktop). |
 | **Single-Player Local Default** | **Valid** | Local-buffer builds remain the default (`SINGLE_PLAYER_LOCAL`), avoiding unnecessary network abstraction layers during single-player execution. |
 | **Temporal Context & Snapshots** | **Upgraded** | Instead of serializing temporal JSON snapshots over network bridges, hot-path coordinate, rotation, and scale data stream continuously via pinned unmanaged memory pointers (`GCHandle.Alloc` + WebAssembly heap mapping). |
 | **Presentation Split (Babylon.js v9)** | **Valid** | Babylon.js v9 remains strictly responsible for rendering, mesh pools, camera control, and interpolation, reading directly from the shared memory buffer without per-entity interop polling. |
@@ -183,6 +189,8 @@ Summary of the scope an agent can search using this server:
 ## Commands
 
 Build frontend assets before .NET commands. Do not run multiple `dotnet` commands concurrently; static-web-asset compression can race.
+
+`src/Game.UI/wwwroot/dist` is **not tracked in git** — every host copies it at build time (`Game.UIAssets.targets`) and fails fast with an instructive error when it is missing. On a fresh clone run `npm ci && npm run build` in `src/Game.UI` first (or pass `-p:BuildFrontend=true` to any host build).
 
 Run from repository root:
 
@@ -198,6 +206,17 @@ npm ci
 npm run build        # DEFAULT: single-player co-located bundle (__RENDER_SOURCE__='local-buffer')
 npm run typecheck    # scoped tsconfig.app.json (Frontend) + tsconfig.node.json (vite.config.ts)
 ```
+
+Windows desktop host (`Game.WinApp`, WinUI 3 + WebView2 + Native AOT):
+
+```powershell
+dotnet build src/Game.WinApp/Game.WinApp.csproj                    # Debug: unpackaged dev run / F5 packaged
+dotnet run   --project src/Game.WinApp/Game.WinApp.csproj          # launches the desktop window
+dotnet publish src/Game.WinApp/Game.WinApp.csproj -c Release -r win-x64 -p:Platform=x64 -p:BuildFrontend=true
+# → src/Game.WinApp/bin/Release/net10.0-windows10.0.26100.0/win-x64/publish/Game.WinApp.exe (+ wwwroot/)
+```
+
+The desktop host needs the Edge **WebView2 runtime** installed (ships with current Windows). Its page is served from `wwwroot` via the `babylon.local` virtual host mapping and boots the **ECS scene** by default (the native-sim demo); the top bar can switch to `Single Player`. Debug builds are not self-contained (launch via `dotnet run`/F5, or use the Release publish).
 
 Run Playwright E2E from `src/Game.Tests.UI` (Node project; needs `npm ci` first):
 
@@ -261,11 +280,13 @@ MAUI builds require .NET MAUI workloads. Platform-specific target frameworks may
 ## Verification Notes
 
 - Test projects: `Game.Tests` (xUnit v3), `Game.Tests.Aot` (TUnit), `Game.Tests.UI` (Playwright, Node-only, not in the solution). Full guide: `docs/testing-ui-E2E/index.md`. `Game.Maui` is temporarily commented out of the solution (web-only builds for speed).
-- After touching `Game.UI` frontend assets, kill any running `Game.Wasm.exe` before rebuilding. 500s on `dist/*` (`game-bundle.js`, `app.css`) = stale/raced output from the `CopyGameUIAssets` MSBuild target; fix by killing the host and rebuilding (delete `src/Game.Wasm/bin`+`obj` if it persists).
-- `bin/`, `obj/`, `node_modules/`, and other build output are ignored. Do not commit them.
+- Playwright E2E covers the **browser-wasm host only** (it boots `Game.Wasm`). The WinApp desktop host has no automated UI coverage — smoke it by launching the published exe and confirming the avatar page + ECS scene animate (`docs/architecture/desktop-webview2.md` has the manual checklist).
+- After touching `Game.UI` frontend assets, kill any running `Game.Wasm.exe`/`Game.WinApp.exe` before rebuilding (file locks). The asset targets prune `dist`/`audio`/`games` before every copy, so stale-chunk 500s are now a host-process problem, not a stale-output problem.
+- `bin/`, `obj/`, `node_modules/`, `src/Game.UI/wwwroot/dist/`, and the host-side copies of `dist`/`audio`/`games`/`background.png` are ignored. Do not commit them.
 - Trust `.csproj`, `.slnx`, `package.json`, and executable build output over setup prose in `README.md`.
 - `docs/index.md` describe architecture; `docs/ai-agents/codebase-truth.md` holds verified API facts; record significant.
 - **Bepu on WASM:** never pass a `ThreadDispatcher` to `Simulation.Timestep` (no thread pool in the browser). The asteroids sim enforces a 2D plane via the pose integrator (z-locked linear velocity + off-z angular velocity) and contact categories via a `CollidableProperty<int>` matrix.
+- **WebView2 API facts:** `PostWebMessageAsArrayBuffer` does not exist — binary data crosses via `PostSharedBufferToScript` (shared memory) and JS must call `chrome.webview.releaseBuffer` after dispatch. The WinRT projection drops parameter names, so those calls take positional arguments. `PublishReadyToRun` must stay disabled whenever `PublishAot=true`.
 
 ## Agent Rules
 

@@ -13,6 +13,7 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- 🚀 Enable Native AOT Compilation -->
     <PublishAot>true</PublishAot>
@@ -21,6 +22,11 @@
     <OptimizationPreference>Speed</OptimizationPreference>
 
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Authoritative ECS + BepuPhysics2 simulation, shared with the browser-wasm host. -->
+    <ProjectReference Include="..\Game.Engine\Game.Engine.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- 📦 Automatically include your Babylon.js folder into the build output -->
@@ -79,9 +85,36 @@
 
   <!-- Publish Properties -->
   <PropertyGroup>
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
-    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <!-- ReadyToRun is not supported together with Native AOT. -->
+    <PublishReadyToRun Condition="'$(PublishAot)' == 'true'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(PublishAot)' != 'true' and '$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(PublishAot)' != 'true' and '$(Configuration)' != 'Debug'">True</PublishReadyToRun>
+
+    <!-- Release publishes unpackaged + self-contained: one native exe plus wwwroot.
+         Debug keeps the MSIX/packaged identity for F5 debugging. -->
+    <WindowsPackageType Condition="'$(Configuration)' == 'Release'">None</WindowsPackageType>
+    <WindowsAppSDKSelfContained Condition="'$(Configuration)' == 'Release'">true</WindowsAppSDKSelfContained>
+    <SelfContained Condition="'$(Configuration)' == 'Release'">true</SelfContained>
+    <SelfContained Condition="'$(Configuration)' == 'Debug'">false</SelfContained>
+
+    <!-- Vendored Arch ECS reports IL3050 for ComponentRegistry.SizeOf(Type): the non-generic
+         reflection fallback (MakeGenericMethod). The engine registers components only through
+         the generic overloads, so that path is dead here — nothing else in the closure is
+         reflection-dynamic. Scoped to the publish configuration; Debug still warns. -->
+    <NoWarn Condition="'$(Configuration)' != 'Debug'">$(NoWarn);IL3050</NoWarn>
   </PropertyGroup>
+
+  <!--
+    Vite + Tailwind output and static assets are copied into the output folder
+    before Build (and mirrored to the publish folder after Publish).
+    Shared with Game.Wasm; see src/Game.UI/Game.UIAssets.targets.
+    Missing bundle fails fast unless -p:BuildFrontend=true is passed.
+  -->
+  <PropertyGroup>
+    <GameUIAssetsMode>OutputFolder</GameUIAssetsMode>
+    <BuildFrontend Condition="'$(BuildFrontend)' == ''">false</BuildFrontend>
+  </PropertyGroup>
+  <Import Project="..\Game.UI\Game.UIAssets.targets" />
 </Project>

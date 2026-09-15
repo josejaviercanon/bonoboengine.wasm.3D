@@ -1,0 +1,90 @@
+<Project>
+
+  <!--
+    Shared frontend asset pipeline for host projects (Game.Wasm, Game.WinApp).
+
+    `Game.UI` owns the Vite + Tailwind source and writes the generated bundle to
+    `src/Game.UI/wwwroot/dist` (see `npm run build` in Game.UI/package.json).
+    That folder is NOT tracked in git — every host consumes a fresh build.
+
+    Two consumption modes:
+
+      GameUIAssetsMode=ProjectWwwroot (default, Game.Wasm)
+          Copies into `$(MSBuildProjectDirectory)\wwwroot` before Build. The
+          WebAssembly SDK discovers static web assets at target time, so a
+          pre-build copy is picked up reliably.
+
+      GameUIAssetsMode=OutputFolder (Game.WinApp)
+          Copies into `$(OutDir)wwwroot` before Build and mirrors it into
+          `$(PublishDir)wwwroot` after Publish. WinUI Content globs are evaluated
+          at project load, so target-time copies into the output folder are the
+          only reliable path (also survives `-p:BuildFrontend=true`, where the
+          bundle does not exist yet when the project is evaluated).
+
+    The destination folders are pruned before every copy so removed or re-hashed
+    Vite chunks can never accumulate (stale `dist/*` = 500s at runtime).
+
+    Opt-in frontend build:
+        dotnet build ... -p:BuildFrontend=true
+    runs `npm run build` in Game.UI first. Without it, a missing bundle fails
+    fast with an instructive error (the .NET build never requires Node by default).
+  -->
+
+  <PropertyGroup>
+    <!-- Game.UI project directory (this file lives next to Game.UI.csproj). -->
+    <GameUIProjectDir Condition="'$(GameUIProjectDir)' == ''">$(MSBuildThisFileDirectory)</GameUIProjectDir>
+    <GameUISourceDir Condition="'$(GameUISourceDir)' == ''">$(GameUIProjectDir)wwwroot</GameUISourceDir>
+    <GameUIAssetsMode Condition="'$(GameUIAssetsMode)' == ''">ProjectWwwroot</GameUIAssetsMode>
+    <!--
+      Only the ProjectWwwroot destination is resolved here. In OutputFolder mode the
+      destination depends on $(OutDir)/$(PublishDir), which are defined by the common
+      targets AFTER the project body — they are read inside the targets below.
+    -->
+    <GameUIDestDir Condition="'$(GameUIDestDir)' == '' and '$(GameUIAssetsMode)' != 'OutputFolder'">$(MSBuildProjectDirectory)\wwwroot</GameUIDestDir>
+    <BuildFrontend Condition="'$(BuildFrontend)' == ''">false</BuildFrontend>
+  </PropertyGroup>
+
+  <Target Name="BuildGameUIFrontend"
+          BeforeTargets="CopyGameUIAssets"
+          Condition="'$(BuildFrontend)' == 'true'">
+    <Exec Command="npm run build" WorkingDirectory="$(GameUIProjectDir)" />
+  </Target>
+
+  <Target Name="CopyGameUIAssets" BeforeTargets="Build">
+    <PropertyGroup>
+      <GameUIDestDir Condition="'$(GameUIDestDir)' == ''">$(OutDir)wwwroot</GameUIDestDir>
+    </PropertyGroup>
+
+    <Error Condition="!Exists('$(GameUISourceDir)\dist\game-bundle.js')"
+           Text="Frontend bundle '$(GameUISourceDir)\dist\game-bundle.js' is missing. Run 'npm ci &amp;&amp; npm run build' in src/Game.UI (or build with -p:BuildFrontend=true)." />
+
+    <!-- Prune before copying: dist chunk hashes change on every Vite build. -->
+    <RemoveDir Directories="$(GameUIDestDir)\dist;$(GameUIDestDir)\audio;$(GameUIDestDir)\games" />
+
+    <ItemGroup>
+      <_GameUIDist Include="$(GameUISourceDir)\dist\**\*" />
+      <_GameUIAudio Include="$(GameUISourceDir)\audio\**\*" />
+      <_GameUIGames Include="$(GameUISourceDir)\games\**\*" />
+      <_GameUIRootFile Include="$(GameUISourceDir)\background.png" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_GameUIDist)" DestinationFiles="@(_GameUIDist->'$(GameUIDestDir)\dist\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_GameUIAudio)" DestinationFiles="@(_GameUIAudio->'$(GameUIDestDir)\audio\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_GameUIGames)" DestinationFiles="@(_GameUIGames->'$(GameUIDestDir)\games\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_GameUIRootFile)" DestinationFolder="$(GameUIDestDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- OutputFolder mode: mirror the fresh build output into the publish folder. -->
+  <Target Name="CopyGameUIAssetsToPublish"
+          AfterTargets="Publish"
+          Condition="'$(GameUIAssetsMode)' == 'OutputFolder'">
+    <RemoveDir Directories="$(PublishDir)wwwroot\dist;$(PublishDir)wwwroot\audio;$(PublishDir)wwwroot\games" />
+    <ItemGroup>
+      <_GameUIPublishFiles Include="$(OutDir)wwwroot\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_GameUIPublishFiles)"
+          DestinationFiles="@(_GameUIPublishFiles->'$(PublishDir)wwwroot\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

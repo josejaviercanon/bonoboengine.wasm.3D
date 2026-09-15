@@ -105,6 +105,6 @@ const onTicker = (ticker: Ticker) => {
 
 Determinism corollary: the authoritative world uses deterministic single-threaded BepuPhysics2 (null `ThreadDispatcher`); no JS-side physics world exists.
 
-## 5. `HEAPF32` shared memory
+## 5. `HEAPF32`/`HEAPF64` shared memory
 
-Pinned shared-memory transfer is implemented: `GCHandle.Alloc(..., Pinned)` → `IntPtr` → `new Float32Array(wasmHeap, ptr, entityCount * Stride)` via `[JSImport]("notifyRender")`. The buffer math is unchanged from the interpolation pattern: `ingest` reads prev/curr straight from stride-indexed floats over a zero-copy view. Design the `InterpState` buffer so the snapshot *source* is swappable — never let JSON parsing leak into the interpolation loop itself.
+Pinned shared-memory transfer is implemented: `GCHandle.Alloc(..., Pinned)` → `IntPtr` → `new Float32Array/Float64Array(wasmHeap, ptr, elementCount)` via `[JSImport]("notifyRender")` on the browser host. The scalar size comes from the signal's `[TypeScriptExport]` precision (4 = `sprite-move`, 8 = `transform3d`). The desktop host (`Game.WinApp`) ships the same pinned span through a WebView2 shared buffer instead of a heap view. The buffer math is unchanged from the interpolation pattern: `ingest` reads prev/curr straight from stride-indexed scalars over a zero-copy view. Design the `InterpState` buffer so the snapshot *source* is swappable — never let JSON parsing leak into the interpolation loop itself.

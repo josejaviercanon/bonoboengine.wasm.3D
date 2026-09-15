@@ -23,5 +23,13 @@ public sealed partial class MainWindow : Window
 
         // Navigate the root frame to the main page on startup.
         RootFrame.Navigate(typeof(MainPage));
+
+        Closed += OnClosed;
+    }
+
+    /// <summary>Stops the simulation and releases the WebView2 shared buffers.</summary>
+    private void OnClosed(object sender, WindowEventArgs args)
+    {
+        (RootFrame.Content as MainPage)?.Shutdown();
     }
 }

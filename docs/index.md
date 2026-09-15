@@ -31,7 +31,9 @@ You should split your codebase into three distinct layers:
 |        2. PRESENTATION BRIDGE        |   |       3. FUTURE SERVER HOSTER        |
 |  - Non-Blazor browser-wasm host      |   |  - ASP.NET Core Minimal API / WebSockets
 |  - [JSImport]/[JSExport] + shared    |   |  - Runs the exact same Core Engine   |
-|    memory (Float32Array over WASM)   |   |  - Verifies incoming client commands |
+|    memory (Float32/Float64 heap view)|   |  - Verifies incoming client commands |
+|  - WinUI 3 + WebView2 desktop host   |   |                                      |
+|    (native AOT, shared buffers)      |   |                                      |
 +--------------------------------------+   +--------------------------------------+
 ```
 
@@ -40,14 +42,14 @@ You should split your codebase into three distinct layers:
    - *The Deterministic Tick:* runs the Arch ECS systems each fixed step (e.g., `MovementSystem`, `ColorSystem`) and emits one **batched** render signal (`EcsRenderSignal`) per interval — not one event per entity — so the presentation layer mirrors authoritative state without per-frame interop. A `ProcessCommand` command pattern is the planned input boundary.
 2. **The Presentation Layer (Babylon.js v9 + Tailwind)** — a pure mirror of your C# state.
    - *Tailwind UI:* DOM overlays for menus, inventories, and HUDs.
-   - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array` over the WASM heap) and updates meshes/cameras per render frame — no per-entity interop calls.
+   - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array`/`Float64Array` over the WASM heap in the browser, `Float64Array` over a WebView2 shared buffer on desktop) and updates meshes/cameras per render frame — no per-entity interop calls.
 
 ### ⚠️ The Performance Gold Rule: Avoid JSON Serialization
 
-Polling C# from JavaScript every frame, or serializing the whole state tree per frame, will reduce your game's frame rate down to single digits. You **must** use a **Push-Based Batched Signal** approach: the engine emits one batched render signal per fixed tick into a pinned `GCHandle` buffer; JS reads it through a `Float32Array` view over the WASM heap (`[JSImport] notifyRender`).
+Polling C# from JavaScript every frame, or serializing the whole state tree per frame, will reduce your game's frame rate down to single digits. You **must** use a **Push-Based Batched Signal** approach: the engine emits one batched render signal per fixed tick into a pinned `GCHandle` buffer; JS reads it through a typed-array view (WASM heap) or the WebView2 shared-buffer mapping.
 
 - ❌ **Bad (Polling):** JS loops at display Hz and calls C# via interop — "Where is everyone right now?" C# serializes 500 characters into JSON and passes it back.
-- ✅ **Good (Batched Delta Push):** the C# engine finishes a tick and writes one batched float32 snapshot into shared memory; JS projects a `Float32Array` over the same memory and updates only the meshes that changed. Zero copies, no JSON, no reflection.
+- ✅ **Good (Batched Delta Push):** the C# engine finishes a tick and writes one batched snapshot into shared memory; JS projects a `Float32Array`/`Float64Array` over the same memory and updates only the meshes that changed. Zero copies, no JSON, no reflection.
 
 **2.1. UI:** keep the presentation layer thin. Use Tailwind CSS for menus, inventories, and HUD. Babylon.js owns the 3D canvas; a modular, object-oriented vanilla TypeScript file (`Frontend/game.ts`) initializes the engine and maps incoming C# signals to mesh transforms.
 
@@ -64,10 +66,10 @@ BABYLON.JS v9                   meshes, thin instances, camera, particles, GPU
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
 - **Domain ownership:** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
-- **Bridge status:** zero-copy shared memory pipeline implemented: C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`. Implementation guide (math, per-entity `InterpState` buffer): `docs/architecture/render-interpolation.md`.
+- **Bridge status:** zero-copy shared memory pipeline implemented on both hosts: C# writes batched signals into a pinned `GCHandle` buffer (`PinnedRenderBuffer<T>`) → the browser host reads `Float32Array`/`Float64Array` over the WASM heap via `[JSImport] notifyRender` (`Game.Wasm/wwwroot/js/wasm-interop.js`); the desktop host copies the same span into a `CoreWebView2SharedBuffer` and posts it via `PostSharedBufferToScript` (`Game.WinApp`, see `docs/architecture/desktop-webview2.md`). Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`. Implementation guide (math, per-entity `InterpState` buffer): `docs/architecture/render-interpolation.md`.
 - **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`, wired into `Game.Engine` and used by `AsteroidsSimulation` as a 2D-plane world). The old Box2D.NET backend and box2d3-wasm presentation physics were removed.
 - **Skeletal animation:** glTF (`.glb`) is the asset contract, not the ECS architecture — two decoupled pipelines (authoring: AI+Blender→`.glb`; runtime: `.glb`→importer→ECS→Babylon.js); the animation state machine belongs to the ECS.
-- **Layout sync (zero-copy guardrails):** the C# float32 layout (`SignalBufferLayout` + `SignalBufferEncoders` in `Game.Engine.ECS`) and the TypeScript decoders are kept in lockstep by `src/Game.Engine.Generators` — a Roslyn analyzer (`BNOBO001` stride mismatch, `BNOBO002` unsupported type) plus a source generator that emits `GeneratedSignalLayout` + a boot-time `[ModuleInitializer]` static assert and writes the generated `src/Game.UI/Frontend/scenes/generated/signalLayout.ts`. Mark every sprite-state struct with `[TypeScriptExport(floatStride)]`. The 3D transform layout (position + quaternion + scale) is a future ADR.
+- **Layout sync (zero-copy guardrails):** the C# signal layout (`SignalBufferLayout` + `SignalBufferEncoders` in `Game.Engine.ECS`) and the TypeScript decoders are kept in lockstep by `src/Game.Engine.Generators` — a Roslyn analyzer (`BNOBO001` stride mismatch, `BNOBO002` unsupported type, `BNOBO003` wide integers) plus a source generator that emits `GeneratedSignalLayout` (`*Stride`, `*ScalarSize`, `*ByteLength`) + a boot-time `[ModuleInitializer]` static assert and writes the generated `src/Game.UI/Frontend/scenes/generated/signalLayout.ts`. Mark every render-state struct with `[TypeScriptExport(elementStride)]` and its `Precision` (`ScalarPrecision.Float32` default, `Float64` for the 3D transform layout: position + quaternion + scale, stride 11).
 
 Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/`.
 

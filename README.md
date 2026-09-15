@@ -1,6 +1,6 @@
 # Bonobo Engine — C# WASM 3D (Babylon.js + BepuPhysics2)
 
-C# browser-wasm monorepo: a pure C# game engine (`Game.Engine` with Arch ECS + BepuPhysics2), a Roslyn analyzer + source generator project (`Game.Engine.Generators`), a shared class library owning the Babylon.js frontend (`Game.UI`), a non-Blazor browser-wasm host (`Game.Wasm`), and a TypeScript-driven Babylon.js build managed by Vite and Tailwind CLI.
+C# browser-wasm monorepo: a pure C# game engine (`Game.Engine` with Arch ECS + BepuPhysics2), a Roslyn analyzer + source generator project (`Game.Engine.Generators`), a shared class library owning the Babylon.js frontend (`Game.UI`), a non-Blazor browser-wasm host (`Game.Wasm`), a WinUI 3 + WebView2 native-AOT desktop host (`Game.WinApp`), and a TypeScript-driven Babylon.js build managed by Vite and Tailwind CLI.
 
 Start with this project mainly because current monogame at 2026 don't have export to web option. Note that for real time games, authoritative ECS in server is not the best option by the http event process for each render update, so added a compilation conditional for single player games.
 
@@ -30,7 +30,9 @@ To make this architecture work without destroying performance, you must isolate 
 |        2. PRESENTATION BRIDGE        |   |       3. FUTURE SERVER HOSTER        |
 |  - Non-Blazor browser-wasm host      |   |  - ASP.NET Core Minimal API / WebSockets
 |  - [JSImport]/[JSExport] + shared    |   |  - Runs the exact same Core Engine   |
-|    memory (Float32Array over WASM)   |   |  - Verifies incoming client commands |
+|    memory (Float32/64 over WASM)     |   |  - Verifies incoming client commands |
+|  - WinUI 3 + WebView2 desktop host   |   |                                      |
+|    (native AOT, shared buffers)      |   |                                      |
 +--------------------------------------+   +--------------------------------------+
 ```
 
@@ -40,11 +42,11 @@ To make this architecture work without destroying performance, you must isolate 
    - *Physics:* `BepuPhysics2` (vendored at `src/bepuphysics2`). The asteroids sim runs a 2D-plane court inside the 3D solver (z-locked pose integrator), with contact filtering via a `CollidableProperty<int>` category matrix and begin-touch accumulation in `INarrowPhaseCallbacks`. Never pass a `ThreadDispatcher` to `Simulation.Timestep` on the browser host.
 2. **The Presentation Layer (Babylon.js v9 + Tailwind)** — a pure mirror of your C# state.
    - *Tailwind UI:* DOM overlays (menus, HUDs, inventory grids) on top of the canvas.
-   - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array` over the WASM heap) and updates meshes/cameras per render frame — no per-entity interop calls.
+   - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array`/`Float64Array` over the WASM heap in the browser, `Float64Array` over a WebView2 shared buffer on desktop) and updates meshes/cameras per render frame — no per-entity interop calls.
 
 ### ⚠️ The Performance Gold Rule: Avoid JSON Serialization
 
-Polling C# from JavaScript every frame, or serializing the whole state tree per frame, will reduce your game's frame rate down to single digits. Use the **Push-Based Batched Signal** approach: the engine emits one batched render signal per fixed tick into a pinned `GCHandle` buffer; JS reads it through a `Float32Array` view (`[JSImport] notifyRender`). Zero copies, no JSON, no reflection.
+Polling C# from JavaScript every frame, or serializing the whole state tree per frame, will reduce your game's frame rate down to single digits. Use the **Push-Based Batched Signal** approach: the engine emits one batched render signal per fixed tick into a pinned `GCHandle` buffer; JS reads it through a typed-array view (browser: `[JSImport] notifyRender` → `Float32Array`/`Float64Array` over `HEAPF32`/`HEAPF64`; desktop: `sharedbufferreceived` from `PostSharedBufferToScript`). Zero copies, no JSON, no reflection.
 
 ## 🧬 Engine Topology: Simulation ↔ Presentation ↔ Render
 
@@ -56,7 +58,7 @@ BABYLON.JS v9                   meshes, thin instances, camera, particles, GPU
 ```
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
-- **Bridge status:** zero-copy shared memory pipeline implemented: C# writes transform snapshots into a pinned `GCHandle` buffer → JS reads `Float32Array` over WASM heap via `[JSImport] notifyRender`. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`.
+- **Bridge status:** zero-copy shared memory pipeline implemented on both hosts: C# writes signal snapshots into a pinned `GCHandle` buffer (`PinnedRenderBuffer<T>`) → the browser host reads `Float32Array`/`Float64Array` over the WASM heap via `[JSImport] notifyRender`; the desktop host copies the same span into a `CoreWebView2SharedBuffer` (`PostSharedBufferToScript`) and the page wraps it as a `Float64Array` (`docs/architecture/desktop-webview2.md`). Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`.
 - **Domain ownership:** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
 - **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`).
 
@@ -82,7 +84,7 @@ Full matrices (ecosystem integration, implementation status, packages) live in `
 - **Physics (BepuPhysics2):** deterministic 3D rigid-body simulation, single-threaded solves on the browser-wasm host (vendored at `src/bepuphysics2`).
 - **Canvas & Presentation Layer (Babylon.js v9):** 3D WebGL2/WebGPU hardware-accelerated rendering with mesh pooling, thin instances, and glTF support (`@babylonjs/core`).
 - **UI Layout & Theme Canvas (Tailwind CSS):** responsive HUDs, menus, popups, and inventory windows using standard HTML/CSS.
-- **Shared-Memory Bridge:** pinned `GCHandle` + `Float32Array` over the WASM heap; the C#↔TS layout is kept in lockstep by `Game.Engine.Generators` (analyzer + source generator + boot-time assert).
+- **Shared-Memory Bridge:** pinned `GCHandle` + `Float32Array`/`Float64Array` over the WASM heap (browser) or WebView2 shared buffers (desktop); the C#↔TS layout (element strides + scalar sizes) is kept in lockstep by `Game.Engine.Generators` (analyzer + source generator + boot-time assert).
 
 ## Repository Layout
 
@@ -90,12 +92,15 @@ Full matrices (ecosystem integration, implementation status, packages) live in `
 bonoboWebGame.slnx          # .NET solution (XML solution format)
 src/
 ├── Game.Engine/            # Pure C# class library (authoritative simulation: Arch ECS + BepuPhysics2)
-├── Game.Engine.Generators/ # Roslyn analyzer + source generator (zero-copy float32 layout guardrails)
+│                           #   ECS/SimulationHost.cs — host-agnostic sim control + pinned buffers
+├── Game.Engine.Generators/ # Roslyn analyzer + source generator (zero-copy signal layout guardrails)
 ├── Game.UI/                # Shared class library (Babylon.js frontend source + static assets)
-│   ├── wwwroot/dist/       # Vite + Tailwind output (generated — never hand-edit)
+│   ├── Game.UIAssets.targets # Shared MSBuild asset pipeline used by every host (prune + copy + fail-fast)
+│   ├── wwwroot/dist/       # Vite + Tailwind output (generated, NOT tracked — run `npm run build`)
 │   └── Frontend/           # Babylon.js TypeScript entry (game.ts) + Tailwind CSS
-├── Game.Wasm/              # browser-wasm host (non-Blazor; [JSImport]/[JSExport] interop)
-├── Game.Tests/             # xUnit v3 tests (determinism, ECS, snapshot shape)
+├── Game.Wasm/              # browser-wasm host (non-Blazor; [JSImport]/[JSExport] interop, heap view)
+├── Game.WinApp/            # Windows desktop host (WinUI 3 + WebView2 + Native AOT, shared buffers)
+├── Game.Tests/             # xUnit v3 tests (determinism, ECS, signal layout)
 ├── Game.Tests.Aot/         # TUnit AOT/trim pattern tests
 ├── Game.Tests.UI/          # Playwright E2E suite (Node — not in the .NET solution)
 ├── bepuphysics2/           # vendored C# physics library (authoritative)
@@ -104,7 +109,7 @@ src/
 └── Temp/                   # upstream samples/demos (not part of the build/solution)
 docs/
 ├── index.md                # Architecture source of truth
-├── adr/                    # Architecture Decision Records
+├── architecture/           # topology.md, render-interpolation.md, desktop-webview2.md
 └── game-development/       # Curated engine-agnostic gamedev knowledge base
 AGENTS.md                   # Agent build/workflow rules
 ```
@@ -115,7 +120,10 @@ AGENTS.md                   # Agent build/workflow rules
 
 - .NET 10 SDK
 - Node.js (LTS) — for Vite and Tailwind CLI
+- Edge **WebView2 runtime** — only needed for the `Game.WinApp` desktop host (ships with current Windows)
 - MAUI workloads (only needed for `Game.Maui` builds — currently commented out of the solution)
+
+> `src/Game.UI/wwwroot/dist` is **not tracked**. Every host copies it at build time and fails fast with an instructive error when it is missing, so run `npm ci && npm run build` in `src/Game.UI` first — or pass `-p:BuildFrontend=true` to a host build.
 
 ### How to Build and Run a Single-Player Game (Default)
 
@@ -141,16 +149,25 @@ physics arena, amiga-textured spheres, free camera) renders fullscreen. No game
 examples or launch menu remain; the WASM host boots the interop bridge for future
 simulations.
 
-Render signals travel as float32 buffers: `DirectRenderTransport` encodes each
-batched signal into the canonical layout (`SignalBuffer.cs`), writes it into a
-pinned `GCHandle` `float[]`, and notifies JS via `[JSImport]("notifyRender")` —
-JS reads a `Float32Array` view over the WASM heap.
+Render signals travel as scalar-typed buffers: `DirectRenderTransport<TSignal, T>` encodes each batched signal into the canonical layout (`SignalBuffer.cs` — 4-byte elements for `sprite-move`, 8-byte elements for `transform3d`), writes it into a pinned `GCHandle` array, and notifies JS via `[JSImport]("notifyRender")` — JS views it as a `Float32Array`/`Float64Array` over the WASM heap.
 
 For best raw sim throughput, publish with AOT (needs
 `dotnet workload install wasm-tools`; dev runs stay interpreted):
 
 ```powershell
 dotnet publish src/Game.Wasm -c Release   # RunAOTCompilation + WasmStripIL
+```
+
+### How to Build and Run the Windows Desktop Host (`Game.WinApp`)
+
+WinUI 3 + WebView2 + **Native AOT**: the native process runs the same ECS/Bepu simulation and
+streams transforms into the page through WebView2 shared buffers — no JSON, no per-entity
+interop. Details: `docs/architecture/desktop-webview2.md`.
+
+```powershell
+dotnet run --project src/Game.WinApp                 # Debug window (unpackaged)
+dotnet publish src/Game.WinApp/Game.WinApp.csproj -c Release -r win-x64 -p:Platform=x64 -p:BuildFrontend=true
+# → src/Game.WinApp/bin/Release/net10.0-windows10.0.26100.0/win-x64/publish/Game.WinApp.exe (+ wwwroot/)
 ```
 
 ### How to Build a Multiplayer (Server-Authoritative) Bundle
@@ -173,12 +190,11 @@ dotnet build bonoboWebGame.slnx
 dotnet test          # Game.Tests (xUnit v3) + Game.Tests.Aot (TUnit); Playwright suite is separate (src/Game.Tests.UI)
 ```
 
-> Build frontend assets before .NET commands. Do not run multiple `dotnet` commands concurrently — static-web-asset compression can race. See `AGENTS.md` for the full command reference.
+> Build frontend assets before .NET commands (`src/Game.UI/wwwroot/dist` is untracked). Do not run multiple `dotnet` commands concurrently — static-web-asset compression can race. See `AGENTS.md` for the full command reference.
 
 ## Games and Examples
 
-The main page renders the Babylon.js demo-balls scene; future games plug into the shared-memory bridge (`WasmInterop`
-buffer exports + `LocalBufferProvider`) kept in `Game.Wasm`.
+The default page renders the Babylon.js demo-balls scene; the ECS scene renders 12 spheres driven by the float64 `transform3d` buffer. Future games plug into the same shared-memory bridge kept in `Game.Engine.ECS.SimulationHost` (pinned buffers + `BufferNotify`), consumed by `Game.Wasm` (heap view) and `Game.WinApp` (WebView2 shared buffers).
 
 ## Licensing
 

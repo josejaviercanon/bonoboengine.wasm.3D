@@ -1,10 +1,12 @@
 {
   "profiles": {
-    "Game.WinApp (Package)": {
-      "commandName": "MsixPackage"
-    },
     "Game.WinApp (Unpackaged)": {
+      "commandLineArgs": "--verbose",
       "commandName": "Project"
+    },
+    "Game.WinApp (Package)": {
+      "commandLineArgs": "--verbose",
+      "commandName": "MsixPackage"
     }
   }
 }

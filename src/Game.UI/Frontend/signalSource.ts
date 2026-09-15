@@ -11,6 +11,8 @@
 // Never call `fetch` from a scene; always route input/start/reset/config commands
 // through `SignalStream.postCommand`.
 
+import type { ScalarArray } from './scenes/generated/signalLayout';
+
 export type RenderSource = 'sse' | 'local-buffer';
 
 declare global {
@@ -26,10 +28,12 @@ export interface SignalStream {
     /** Subscribe to one named signal (SSE event name today); `data` is raw JSON. */
     addSignalListener(eventName: string, onData: (data: string) => void): void;
     /**
-     * Subscribe to one named signal as a raw float32 buffer.
+     * Subscribe to one named signal as a raw scalar buffer (Float32Array or
+     * Float64Array — the element type is declared by the C# [TypeScriptExport]
+     * struct and kept in `generated/signalLayout.ts`).
      * Only ever fires in `local-buffer` builds — the SSE-branch stub is a no-op.
      */
-    addBufferListener(eventName: string, onData: (floats: Float32Array) => void): void;
+    addBufferListener(eventName: string, onData: (values: ScalarArray) => void): void;
     /**
      * Send one player/game command to the simulation (input, start, reset,
      * pause, config…). The ONLY way a scene may talk to the sim.
@@ -42,13 +46,14 @@ export interface SignalStream {
 }
 
 /**
- * The co-located WASM host registers a typed-array bridge here: every signal is delivered as the Float32Array view over the
- * pinned shared buffer written by `DirectRenderTransport`, and every command
- * is a direct in-process call into the sim's public API (`QueueInput`,
- * `Start`, `Reset`, …) keyed by the same `path` the SSE branch would POST to.
+ * The co-located host registers a typed-array bridge here: every signal is delivered as
+ * the Float32Array/Float64Array view over the pinned buffer written by
+ * `DirectRenderTransport` (WASM heap) or a WebView2 shared buffer (desktop), and every
+ * command is a direct in-process call into the sim's public API (`QueueInput`, `Start`,
+ * `Reset`, …) keyed by the same `path` the SSE branch would POST to.
  */
 export interface LocalBufferProvider {
-    onSignal(eventName: string, onData: (floats: Float32Array) => void): void;
+    onSignal(eventName: string, onData: (values: ScalarArray) => void): void;
     /** Direct command: dispatch `path` to the sim in-process, zero HTTP. */
     postCommand?(path: string, bodyJson?: string): void;
     /** One-shot scene-boot setup. */

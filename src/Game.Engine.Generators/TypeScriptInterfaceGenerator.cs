@@ -10,11 +10,12 @@ using Microsoft.CodeAnalysis.Text;
 namespace Game.Engine.Generators;
 
 /// <summary>
-///     Emits the TypeScript half of the shared-memory float32 contract 
-///     from the C# structs marked <c>[TypeScriptExport]</c>, and a fail-fast
-///     <c>[ModuleInitializer]</c> that asserts the computed strides match
-///     <c>Game.Engine.ECS.SignalBufferLayout</c> at WASM boot. Single source of truth:
-///     the C# struct — the frontend can no longer drift from the backend layout.
+///     Emits the TypeScript half of the shared-memory signal contract from the C#
+///     structs marked <c>[TypeScriptExport]</c>, and a fail-fast <c>[ModuleInitializer]</c>
+///     that asserts the computed strides and scalar sizes match
+///     <c>Game.Engine.ECS.SignalBufferLayout</c> at boot (WASM and WinApp alike). Single
+///     source of truth: the C# struct — the frontend can no longer drift from the backend
+///     layout.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
@@ -62,6 +63,7 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
             return null;
 
         var declaredStride = 0;
+        var scalarSize = InteropNames.Float32Size;
         var hasAttribute = false;
         foreach (var ad in symbol.GetAttributes())
         {
@@ -72,6 +74,7 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
             hasAttribute = true;
             if (ad.ConstructorArguments.Length > 0 && ad.ConstructorArguments[0].Value is int stride)
                 declaredStride = stride;
+            scalarSize = StructLayoutInspector.GetScalarSize(ad);
             break;
         }
 
@@ -81,7 +84,7 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
         var computed = 0;
         foreach (var m in members)
         {
-            var width = StructLayoutInspector.FloatWidth(m.Type!);
+            var width = StructLayoutInspector.ScalarWidth(m.Type!);
             if (width > 0) computed += width;
         }
 
@@ -91,6 +94,7 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
             Namespace = symbol.ContainingNamespace.ToDisplayString(),
             DeclaredStride = declaredStride,
             ComputedStride = computed,
+            ScalarSize = scalarSize,
             Members = members
         };
     }
@@ -99,10 +103,10 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
     {
         if (targets.IsDefaultOrEmpty) return;
 
-        // 1. C# half: generated stride constants + module-initializer fail-fast.
+        // 1. C# half: generated stride/scalar constants + module-initializer fail-fast.
         ctx.AddSource("GeneratedSignalLayout.g.cs", SourceText.From(BuildCSharp(targets), Encoding.UTF8));
 
-        // 2. TypeScript half: interfaces + stride constants written to Game.UI's frontend tree.
+        // 2. TypeScript half: interfaces + layout constants written to Game.UI's frontend tree.
         if (string.IsNullOrEmpty(projectDir)) return;
         try
         {
@@ -130,7 +134,11 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
         sb.AppendLine("    public static class GeneratedSignalLayout");
         sb.AppendLine("    {");
         foreach (var t in targets)
+        {
             sb.AppendLine("        public const int " + t.Name + "Stride = " + t.ComputedStride + ";");
+            sb.AppendLine("        public const int " + t.Name + "ScalarSize = " + t.ScalarSize + ";");
+            sb.AppendLine("        public const int " + t.Name + "ByteLength = " + (t.ComputedStride * t.ScalarSize) + ";");
+        }
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    internal static class GeneratedLayoutStaticAssert");
@@ -140,14 +148,16 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
         sb.AppendLine("        {");
         sb.AppendLine("            if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<float>() != 4)");
         sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: sizeof(float) != 4; zero-copy Float32Array interop requires 4-byte floats.\");");
+        sb.AppendLine("            if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<double>() != 8)");
+        sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: sizeof(double) != 8; zero-copy Float64Array interop requires 8-byte doubles.\");");
         foreach (var t in targets)
         {
             var constName = StructLayoutInspector.LayoutConstName(t.Name);
             sb.AppendLine("            if (GeneratedSignalLayout." + t.Name + "Stride != global::" + InteropNames.EngineEcsNamespace + ".SignalBufferLayout." + constName + "Stride)");
-            sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: " + t.Name + " float-stride drifted from SignalBufferLayout." + constName + "Stride.\");");
+            sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: " + t.Name + " element-stride drifted from SignalBufferLayout." + constName + "Stride.\");");
+            sb.AppendLine("            if (GeneratedSignalLayout." + t.Name + "ScalarSize != global::" + InteropNames.EngineEcsNamespace + ".SignalBufferLayout." + constName + "ScalarSize)");
+            sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: " + t.Name + " scalar size (" + StructLayoutInspector.ScalarName(t.ScalarSize) + ") drifted from SignalBufferLayout." + constName + "ScalarSize.\");");
         }
-        //sb.AppendLine("            if (GeneratedSignalLayout.SpriteStateStride != global::" + InteropNames.EngineEcsNamespace + ".SignalBufferLayout.TetrisStride)");
-        //sb.AppendLine("                throw new global::System.InvalidOperationException(\"MEMORY ALIGNMENT FATAL: SpriteState float-stride drifted from SignalBufferLayout.TetrisStride.\");");
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine("}");
@@ -162,7 +172,13 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
         sb.AppendLine("// Single source of truth: the C# [TypeScriptExport] structs and Game.Engine.ECS.SignalBufferLayout.");
         sb.AppendLine("// Regenerated on every `dotnet build` of Game.Engine.");
         sb.AppendLine();
-        sb.AppendLine("/** Standard signal header: the first six floats of every signal buffer. */");
+        sb.AppendLine("/** Scalar element type of the shared-memory signal buffer. */");
+        sb.AppendLine("export type ScalarArray = Float32Array | Float64Array;");
+        sb.AppendLine();
+        sb.AppendLine("/** Scalar element sizes in bytes; keep in sync with ScalarPrecision. */");
+        sb.AppendLine("export const ScalarSizes = { Float32: 4, Float64: 8 } as const;");
+        sb.AppendLine();
+        sb.AppendLine("/** Standard signal header: the first six elements of every signal buffer. */");
         sb.AppendLine("export interface BufferHeader {");
         sb.AppendLine("    seq: number;");
         sb.AppendLine("    epoch: number;");
@@ -181,6 +197,8 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
                 sb.AppendLine("    " + StructLayoutInspector.CamelCase(m.Name) + ": " + StructLayoutInspector.TsType(m.Type!) + ";");
             sb.AppendLine("}");
             sb.AppendLine("export const " + t.Name + "Stride = " + t.ComputedStride + ";");
+            sb.AppendLine("export const " + t.Name + "ScalarSize = " + t.ScalarSize + ";");
+            sb.AppendLine("export const " + t.Name + "ByteLength = " + (t.ComputedStride * t.ScalarSize) + ";");
             sb.AppendLine();
         }
         return sb.ToString();

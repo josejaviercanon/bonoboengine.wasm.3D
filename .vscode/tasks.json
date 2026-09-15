@@ -27,6 +27,34 @@
           "endsPattern": ".*(http://localhost:63008).*"
         }
       }
+    },
+    {
+      "label": "publish-winapp-aot",
+      "detail": "Compile Game.WinApp (WinUI 3 + WebView2) to a native win-x64 AOT binary, rebuilding the frontend first.",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "publish",
+        "src/Game.WinApp/Game.WinApp.csproj",
+        "-c", "Release",
+        "-r", "win-x64",
+        "-p:Platform=x64",
+        "-p:BuildFrontend=true"
+      ],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "publish-wasm-aot",
+      "detail": "Publish the browser-wasm host (Native AOT) with a fresh frontend build.",
+      "type": "shell",
+      "command": "dotnet",
+      "args": [
+        "publish",
+        "src/Game.Wasm/Game.Wasm.csproj",
+        "-c", "Release",
+        "-p:BuildFrontend=true"
+      ],
+      "problemMatcher": "$msCompile"
     }
   ]
 }

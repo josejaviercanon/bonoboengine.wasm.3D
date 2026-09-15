@@ -13,16 +13,17 @@ import type { SceneHandle } from './scenes/types';
 // whole pipeline is traceable from the browser console (F12).
 const dbg = (...args: unknown[]) => console.log('[babylon-debug]', ...args);
 
+type SceneName = 'singlePlayer' | 'ecs';
+
 declare global {
     interface Window {
-        initGame: (containerId: string) => Promise<void>;
+        /** `initialScene` defaults to 'singlePlayer'; the desktop host boots 'ecs'. */
+        initGame: (containerId: string, initialScene?: SceneName) => Promise<void>;
         registerLocalBufferProvider: (provider: LocalBufferProvider) => void;
         __spector: unknown;
         __scene: unknown;
     }
 }
-
-type SceneName = 'singlePlayer' | 'ecs';
 
 interface SceneDefinition {
     /** SimHost game key — `/api/{gameKey}/connect` stops the old sim and starts this one. */
@@ -40,8 +41,8 @@ let container: HTMLElement | null = null;
 let canvas: HTMLCanvasElement | null = null;
 let activeHandle: SceneHandle | null = null;
 
-export async function initGame(containerId: string): Promise<void> {
-    dbg('initGame called, containerId =', containerId);
+export async function initGame(containerId: string, initialScene: SceneName = 'singlePlayer'): Promise<void> {
+    dbg('initGame called, containerId =', containerId, 'initialScene =', initialScene);
 
     container = document.getElementById(containerId);
     if (!container) {
@@ -68,7 +69,7 @@ export async function initGame(containerId: string): Promise<void> {
 
     engine = new Engine(canvas, true, { antialias: true, stencil: true, preserveDrawingBuffer: true });
 
-    await switchScene('singlePlayer');
+    await switchScene(initialScene);
 
     engine.runRenderLoop(() => activeHandle?.scene.render());
     window.addEventListener('resize', () => engine?.resize());

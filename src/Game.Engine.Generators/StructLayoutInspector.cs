@@ -11,24 +11,45 @@ internal sealed class ExportMember
     public ITypeSymbol? Type;
 }
 
-/// <summary>An [TypeScriptExport] struct and its derived float32 layout.</summary>
+/// <summary>An [TypeScriptExport] struct and its derived signal-buffer layout.</summary>
 internal sealed class ExportTarget
 {
     public string Name = string.Empty;
     public string Namespace = string.Empty;
     public int DeclaredStride;
     public int ComputedStride;
+    public int ScalarSize = InteropNames.Float32Size;
     public List<ExportMember> Members = new();
 }
 
 /// <summary>
-///     Shared layout math for the analyzer and generator. The float32 signal buffer
-///     widens every scalar field to one float (ids, bytes and bools ride in float32 —
-///     see <c>SignalBuffer</c>), so the stride of a struct is simply the count of its
-///     fields. This mirrors the encoding performed by <c>SignalBufferEncoders</c>.
+///     Shared layout math for the analyzer and generator. Every scalar field widens to
+///     exactly one element in the signal buffer (ids, bytes and bools ride in the scalar
+///     type — see <c>SignalBuffer</c>), so the stride of a struct is simply the count of its
+///     fields; the scalar element type (4-byte float or 8-byte double) comes from the
+///     attribute's <c>Precision</c>. This mirrors the encoding performed by
+///     <c>SignalBufferEncoders</c>.
 /// </summary>
 internal static class StructLayoutInspector
 {
+    /// <summary>Reads the declared <c>Precision</c> named argument; Float32 when absent.</summary>
+    public static int GetScalarSize(AttributeData attribute)
+    {
+        foreach (var named in attribute.NamedArguments)
+        {
+            if (named.Key == "Precision" &&
+                named.Value.Value is int size &&
+                (size == InteropNames.Float32Size || size == InteropNames.Float64Size))
+                return size;
+        }
+
+        return InteropNames.Float32Size;
+    }
+
+    /// <summary>Precision identifier used by generated C#/TypeScript constants.</summary>
+    public static string ScalarName(int scalarSize) =>
+        scalarSize == InteropNames.Float64Size ? "Float64" : "Float32";
+
     /// <summary>Extracts the ordered member list for a struct (record structs use the primary constructor).</summary>
     public static List<ExportMember> GetMembers(INamedTypeSymbol symbol)
     {
@@ -63,8 +84,8 @@ internal static class StructLayoutInspector
         return fieldList;
     }
 
-    /// <summary>Number of floats a field type occupies in the signal buffer; -1 = unsupported.</summary>
-    public static int FloatWidth(ITypeSymbol type)
+    /// <summary>Number of scalar elements a field type occupies in the signal buffer; -1 = unsupported.</summary>
+    public static int ScalarWidth(ITypeSymbol type)
     {
         if (type.TypeKind == TypeKind.Enum) return 1;
         switch (type.SpecialType)
@@ -86,7 +107,11 @@ internal static class StructLayoutInspector
         }
     }
 
-    /// <summary>TypeScript type for a field: everything float32-encodable is <c>number</c> except bool.</summary>
+    /// <summary>True when the field is a 64-bit integer (unsafe past 2^53 once widened to a JS number).</summary>
+    public static bool IsWideInteger(ITypeSymbol type) =>
+        type.SpecialType == SpecialType.System_Int64 || type.SpecialType == SpecialType.System_UInt64;
+
+    /// <summary>TypeScript type for a field: everything signal-encodable is <c>number</c> except bool.</summary>
     public static string TsType(ITypeSymbol type) =>
         type.SpecialType == SpecialType.System_Boolean ? "boolean" : "number";
 

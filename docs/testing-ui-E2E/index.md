@@ -12,6 +12,10 @@ Three test projects cover the simulation/presentation split. All commands verifi
 
 `Game.Tests` and `Game.Tests.Aot` are in `bonoboWebGame.slnx`; `Game.Tests.UI` is a Node project (no `.csproj`) and runs via npm.
 
+**Prerequisite:** the frontend bundle must exist (`src/Game.UI/wwwroot/dist` is untracked). On a fresh clone run `npm ci && npm run build` in `src/Game.UI` first — host builds fail fast with an instructive error otherwise (or pass `-p:BuildFrontend=true`).
+
+**Desktop host coverage:** Playwright boots the browser-wasm host only. The WinUI 3 + WebView2 host (`src/Game.WinApp`) has no automated UI coverage — smoke it manually with the checklist in `docs/architecture/desktop-webview2.md`.
+
 ## .NET 10 / MTP requirements
 
 - `global.json` at repo root contains `{"test":{"runner":"Microsoft.Testing.Platform"}}`. **Required**: without it `dotnet test` silently misbehaves on .NET 10. Do not delete.
@@ -25,7 +29,7 @@ Three test projects cover the simulation/presentation split. All commands verifi
 - Config (`playwright.config.ts`): port **5902**, `webServer` boots `dotnet run --project ../../src/Game.Wasm` with `ASPNETCORE_URLS` env var. Set `GAME_WEB_EXTERNAL_URL` to reuse an already-running host.
 - `workers: 1`, `fullyParallel: false` — the host holds singleton simulations.
 - npm scripts: `test`, `test:headed`, `test:ui`, `report`, `typecheck`. Run `npm run typecheck` after spec edits.
-- **Static-asset 500s after touching `Game.UI` assets**: `dist/*` (game-bundle.js, app.css) returning 500 means the `CopyGameUIAssets` MSBuild target didn't copy them to `Game.Wasm/wwwroot`. Kill all `Game.Wasm.exe` (`taskkill //F //IM Game.Wasm.exe`), delete `src/Game.Wasm/bin` + `src/Game.Wasm/obj`, then rebuild. Never build while a host is running.
+- **Static-asset 500s after touching `Game.UI` assets**: the asset targets prune and re-copy `dist`/`audio`/`games` before every host build, so stale chunks can no longer accumulate. A 500 on `dist/*` now means the running host process is serving a folder that was pruned mid-flight — kill all `Game.Wasm.exe` (`taskkill //F //IM Game.Wasm.exe`), rebuild, and re-run. Never build while a host is running.
 - **Bootstrap timing**: `game-bundle.js` is an ES module with dynamic imports; its execution can finish *after* the window `load` event. The WASM boot (`main.mjs` → `dotnet.js` → runtime) also takes time. Tests assert canvas visibility with a 60 s timeout — do not shrink these without understanding cold-load module fetches.
 - `/hello` `data-message` payload is plain text, not JSON. Home heading text is `Bonobo Engine` (there is no `<title>`).
 

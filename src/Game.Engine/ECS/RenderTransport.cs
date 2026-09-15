@@ -4,8 +4,9 @@ namespace Game.Engine.ECS;
 ///     Transport seam between a simulation and its presentation layer.
 ///     The simulation pushes batched render signals; the implementation decides how
 ///     they reach the consumer — an in-process event consumed by the SSE endpoints
-///     (server-authoritative host), or a direct memory path for the co-located
-///     single-player host (Phase 2: pinned buffer read as a <c>Float32Array</c>).
+///     (server-authoritative host), or a direct memory path for the co-located hosts
+///     (pinned buffer read as a <c>Float32Array</c>/<c>Float64Array</c> over the WASM
+///     heap, or written into a WebView2 shared buffer on desktop).
 ///     Replaces the per-simulation <c>OnRenderSignal?.Invoke</c> emission sites so a
 ///     co-located build can bypass the HTTP/SSE/JSON boundary without touching
 ///     simulation logic.

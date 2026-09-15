@@ -436,9 +436,18 @@ nul*
 Temp/
 TestResults/
 
-# Generated frontend build output (Vite + Tailwind CLI) — rebuilt via `npm run build` in src/Game.UI
-# Uncomment if you have tasks that create the project's static files in wwwroot
-#src/Game.UI/wwwroot/dist/
+# Generated frontend build output (Vite + Tailwind CLI) — rebuilt via `npm run build` in src/Game.UI.
+# Root source of truth is src/Game.UI/wwwroot/dist; hosts copy it via src/Game.UI/Game.UIAssets.targets.
+src/Game.UI/wwwroot/dist/
+src/Game.Wasm/wwwroot/dist/
+# Host-side copies of Game.UI static assets (created by the same MSBuild target).
+src/Game.Wasm/wwwroot/audio/
+src/Game.Wasm/wwwroot/games/
+src/Game.Wasm/wwwroot/background.png
+src/Game.WinApp/wwwroot/dist/
+src/Game.WinApp/wwwroot/audio/
+src/Game.WinApp/wwwroot/games/
+src/Game.WinApp/wwwroot/background.png
 
 # Playwright (Game.Tests.UI) output
 src/Game.Tests.UI/playwright-report/

@@ -4,11 +4,16 @@ using Game.Engine.ECS;
 
 namespace Game.Wasm;
 
+/// <summary>
+///     Browser-wasm interop bridge. Simulation logic and buffer ownership live in
+///     <see cref="SimulationHost"/>/<c>Game.Engine</c>; this type only exposes the
+///     low-frequency verbs to JavaScript and forwards committed buffer notifications
+///     through <c>notifyRender</c>, which projects a typed array over the WASM heap.
+/// </summary>
 [SupportedOSPlatform("browser")]
 public static partial class WasmInterop
 {
-    private static readonly Dictionary<string, PinnedRenderBuffer> _buffers = new();
-    private static readonly SimHost _simHost = new();
+    private static readonly SimulationHost _simHost = new(Notify);
 
     internal static void Initialize()
     {
@@ -26,38 +31,13 @@ public static partial class WasmInterop
         _simHost.SetPaused(paused);
     }
 
-    internal static void RegisterBuffer(string eventName, PinnedRenderBuffer buffer)
+    /// <summary>Forwarded to JS after every committed buffer (scalarSize: 4 = float32, 8 = float64).</summary>
+    private static void Notify(string eventName, nint bufferPtr, int elementCount, int scalarSize)
     {
-        _buffers[eventName] = buffer;
-    }
-
-    internal static void UnregisterBuffer(string eventName)
-    {
-        if (_buffers.TryGetValue(eventName, out var buffer))
-        {
-            buffer.Dispose();
-            _buffers.Remove(eventName);
-        }
-    }
-
-    internal static void Notify(string eventName)
-    {
-        if (_buffers.TryGetValue(eventName, out var buffer))
-            NotifyRender(eventName, (int)buffer.Ptr, buffer.FloatCount);
+        // The WASM heap is a 32-bit linear memory, so the pointer fits the JSImport int contract.
+        NotifyRender(eventName, (int)bufferPtr, elementCount, scalarSize);
     }
 
     [JSImport("notifyRender", "WasmInterop")]
-    internal static partial void NotifyRender(string eventName, int bufferPtr, int floatCount);
-
-    [JSExport]
-    internal static int GetBufferPtr(string eventName)
-    {
-        return _buffers.TryGetValue(eventName, out var b) ? (int)b.Ptr : 0;
-    }
-
-    [JSExport]
-    internal static int GetBufferLen(string eventName)
-    {
-        return _buffers.TryGetValue(eventName, out var b) ? b.FloatCount : 0;
-    }
+    internal static partial void NotifyRender(string eventName, int bufferPtr, int elementCount, int scalarSize);
 }

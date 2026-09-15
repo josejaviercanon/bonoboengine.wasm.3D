@@ -19,8 +19,8 @@ const MESH_POOL_CAPACITY = 32;
 
 /**
  * ECS-authoritative 3D demo scene. All transforms (position + quaternion +
- * scale) arrive batched as a Float32Array view over the pinned WASM heap
- * ("transform3d" buffer), decoded by `decodeTransform3D` and applied to the
+ * scale) arrive batched as a Float64Array view over the pinned shared buffer
+ * ("transform3d" signal), decoded by `decodeTransform3D` and applied to the
  * mesh pool every tick. Zero per-entity interop calls, zero JSON.
  */
 export async function createEcsScene(engine: Engine, canvas: HTMLCanvasElement): Promise<SceneHandle> {
@@ -59,8 +59,8 @@ export async function createEcsScene(engine: Engine, canvas: HTMLCanvasElement):
     if (!stream) {
         console.error('[babylon-debug] sceneECS: no signal stream (local-buffer provider missing)');
     } else {
-        stream.addBufferListener('transform3d', (floats) => {
-            const snapshot = decodeTransform3D(floats);
+        stream.addBufferListener('transform3d', (values) => {
+            const snapshot = decodeTransform3D(values);
             for (const state of snapshot.states) {
                 const mesh = pool.get(state.id);
                 if (!mesh) continue;

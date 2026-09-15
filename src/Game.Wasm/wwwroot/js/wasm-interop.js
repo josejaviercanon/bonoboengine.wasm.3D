@@ -1,12 +1,17 @@
 let _provider = null;
 let _exports = null;
 
-export function notifyRender(eventName, bufferPtr, floatCount) {
+export function notifyRender(eventName, bufferPtr, elementCount, scalarSize) {
     const runtime = globalThis.getDotnetRuntime(0);
     if (!runtime) return;
-    const heap = runtime.localHeapViewF32();
-    const floats = new Float32Array(heap.buffer, bufferPtr, floatCount);
-    dispatchFloats(eventName, floats);
+    // The scalar type is declared by the C# [TypeScriptExport] struct: float32 buffers
+    // (ecs/sprite-move) view HEAPF32, float64 buffers (transform3d) view HEAPF64.
+    // Both are zero-copy typed-array views over the same WASM linear memory.
+    const heap = scalarSize === 8 ? runtime.localHeapViewF64() : runtime.localHeapViewF32();
+    const values = scalarSize === 8
+        ? new Float64Array(heap.buffer, bufferPtr, elementCount)
+        : new Float32Array(heap.buffer, bufferPtr, elementCount);
+    dispatchFloats(eventName, values);
 }
 
 function dispatchFloats(eventName, floats) {

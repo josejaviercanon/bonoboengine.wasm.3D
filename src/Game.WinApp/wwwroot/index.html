@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>BonoboEngine</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="stylesheet" href="dist/app.css" />
+    <!-- Suppress Chromium's implicit /favicon.ico request (no icon ships with the desktop shell). -->
+    <link rel="icon" href="data:," />
+</head>
+<body class="bg-slate-950 m-0 p-0 overflow-hidden">
+    <div id="render-viewport" style="position:fixed;inset:0;display:block;z-index:2;"></div>
+
+    <!--
+      Desktop (WinApp) shell. The Babylon bundle is host-agnostic: it only needs
+      window.registerLocalBufferProvider. The WebView2 bridge below installs that
+      provider on top of chrome.webview shared buffers and boots the renderer.
+      (The browser-wasm host uses its own index.html + main.mjs instead.)
+    -->
+    <script type="module" src="dist/game-bundle.js"></script>
+    <script type="module" src="js/webview-bridge.js"></script>
+</body>
+</html>

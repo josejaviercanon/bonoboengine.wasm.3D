@@ -6,8 +6,11 @@ using Game.Engine.Interop;
 
 namespace Game.Engine.ECS;
 
-/// <summary>Plain-data snapshot of one entity, serializable for the SSR payload and SSE stream.</summary>
-[TypeScriptExport(6)]
+/// <summary>
+///     Plain-data snapshot of one entity, serialized into the shared-memory float32
+///     "sprite-move" buffer (2D sprites keep float32; the 3D transform signal is float64).
+/// </summary>
+[TypeScriptExport(6, Precision = ScalarPrecision.Float32)]
 public record struct SpriteState(int Id, float X, float Y, byte R, byte G, byte B);
 
 /// <summary>Batched render signal emitted at most once per <see cref="EcsSimulation.SignalIntervalSeconds"/>.</summary>
