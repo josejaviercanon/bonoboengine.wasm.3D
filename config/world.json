@@ -1,0 +1,6 @@
+{
+  "entityCount": 12,
+  "gravity": { "x": 0.0, "y": -9.81, "z": 0.0 },
+  "arena": { "halfWidth": 45.0, "halfHeight": 20.0, "halfDepth": 45.0, "floorY": -4.0 },
+  "spawnSpeed": { "base": 8.0, "step": 4.0 }
+}

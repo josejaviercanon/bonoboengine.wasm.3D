@@ -8,6 +8,7 @@
     "build:js:web": "vite build --mode web",
     "build:css": "npx @tailwindcss/cli -i ./Frontend/app.css -o ./wwwroot/dist/app.css --minify",
     "build": "npm run build:js && npm run build:css",
+    "dev": "node scripts/dev.mjs",
     "build:web": "npm run build:js:web && npm run build:css",
     "typecheck": "tsc -b",
     "watch:js": "vite build --watch",

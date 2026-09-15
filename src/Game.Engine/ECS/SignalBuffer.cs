@@ -47,8 +47,8 @@ public static class SignalBufferLayout
     public const int EcsScalarSize = 8;
     public const int EcsByteLength = EcsStride * EcsScalarSize;
 
-    // transform3d: no extras, Transform3DState record (id, xyz, quat xyzw, scale xyz) — float64.
-    public const int Transform3DStride = 11;
+    // transform3d: no extras, Transform3DState record (id, xyz, quat xyzw, scale xyz, lifecycle) — float64.
+    public const int Transform3DStride = 12;
     public const int Transform3DScalarSize = 8;
     public const int Transform3DByteLength = Transform3DStride * Transform3DScalarSize;
 }
@@ -107,6 +107,7 @@ public static class SignalBufferEncoders
                 dst[8] = st.Sx;
                 dst[9] = st.Sy;
                 dst[10] = st.Sz;
+                dst[11] = st.Lifecycle;
             });
     }
 

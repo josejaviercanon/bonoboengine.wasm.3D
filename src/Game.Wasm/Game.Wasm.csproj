@@ -12,11 +12,21 @@
     <InvariantTimezone>true</InvariantTimezone>
     <TrimMode>full</TrimMode>
     <WasmGenerateAppBundle>true</WasmGenerateAppBundle>
+    <!-- Opt-in browser threading (see docs/adr/ADR-012-wasm-multithreading.md):
+         requires COOP/COEP headers on every server that hosts the app. -->
+    <WasmEnableThreads Condition="'$(WasmThreads)' == 'true'">true</WasmEnableThreads>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Game.Engine\Game.Engine.csproj" />
     <ProjectReference Include="..\Game.UI\Game.UI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Watch Remove="wwwroot\dist\**\*" />
+    <Watch Remove="wwwroot\assets\**\*" />
+    <Watch Remove="wwwroot\audio\**\*" />
+    <Watch Remove="wwwroot\games\**\*" />
   </ItemGroup>
 
   <!--

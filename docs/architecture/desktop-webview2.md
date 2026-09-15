@@ -68,7 +68,7 @@ Host-side rules (`SharedBufferChannel`):
 
 The WinApp project imports `src/Game.UI/Game.UIAssets.targets` with `GameUIAssetsMode=OutputFolder`:
 
-- `CopyGameUIAssets` runs `BeforeTargets="Build"` and copies `dist/`, `audio/`, `games/` and `background.png` into `$(OutDir)wwwroot` after pruning those folders. Project-wwwroot copies are wrong for WinUI: `Content` globs are evaluated at project load, so files created during the build would be missed (and stray copies in the project tree would be picked up as resources).
+- `CopyGameUIAssets` runs `BeforeTargets="Build"` and copies `dist/`, `assets/`, `audio/`, `games/` and `background.png` into `$(OutDir)wwwroot` after pruning those folders. Project-wwwroot copies are wrong for WinUI: `Content` globs are evaluated at project load, so files created during the build would be missed (and stray copies in the project tree would be picked up as resources).
 - `CopyGameUIAssetsToPublish` mirrors the output into `$(PublishDir)wwwroot` after `Publish`.
 - A missing `Game.UI/wwwroot/dist/game-bundle.js` fails the build with an instructive error; pass `-p:BuildFrontend=true` to run `npm run build` first.
 

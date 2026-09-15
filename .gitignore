@@ -440,11 +440,15 @@ TestResults/
 # Root source of truth is src/Game.UI/wwwroot/dist; hosts copy it via src/Game.UI/Game.UIAssets.targets.
 src/Game.UI/wwwroot/dist/
 src/Game.Wasm/wwwroot/dist/
+# Generated binary world config — rebuild with `dotnet run --project src/Game.ConfigBuilder`.
+src/Game.UI/wwwroot/assets/config.bin
 # Host-side copies of Game.UI static assets (created by the same MSBuild target).
+src/Game.Wasm/wwwroot/assets/
 src/Game.Wasm/wwwroot/audio/
 src/Game.Wasm/wwwroot/games/
 src/Game.Wasm/wwwroot/background.png
 src/Game.WinApp/wwwroot/dist/
+src/Game.WinApp/wwwroot/assets/
 src/Game.WinApp/wwwroot/audio/
 src/Game.WinApp/wwwroot/games/
 src/Game.WinApp/wwwroot/background.png

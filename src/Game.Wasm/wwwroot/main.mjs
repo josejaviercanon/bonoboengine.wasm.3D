@@ -19,6 +19,24 @@ setupProvider(exports);
 // Run C# Main() — minimal interop bootstrap
 await runMain();
 
+// Hand the binary world config to the engine before any simulation connects.
+// One-time copy of a tiny blob; the zero-copy contract applies to per-frame signals.
+async function loadConfiguration() {
+    try {
+        const response = await fetch('assets/config.bin', { cache: 'no-cache' });
+        if (!response.ok) {
+            console.warn('[babylon-debug] assets/config.bin unavailable (HTTP ' + response.status + ') — engine defaults in use');
+            return;
+        }
+        const bytes = Array.from(new Uint8Array(await response.arrayBuffer()));
+        exports.Game.Wasm.WasmInterop.LoadConfiguration(bytes);
+        dbg('binary config loaded:', bytes.length, 'bytes');
+    } catch (err) {
+        console.warn('[babylon-debug] config load failed — engine defaults in use:', err);
+    }
+}
+await loadConfiguration();
+
 // Wait for the Babylon bundle then init the demo scene canvas
 async function bootRenderer() {
     if (typeof window.initGame !== 'function') {

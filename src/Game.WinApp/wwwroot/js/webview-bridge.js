@@ -27,7 +27,7 @@ const provider = {
         this._listeners[eventName].push(onData);
     },
     postCommand(path) {
-        const match = path.match(/^\/api\/([a-z0-9-]+)\/(connect|start|reset|pause|resume)$/);
+        const match = path.match(/^\/api\/([a-z0-9-]+)\/(connect|start|reset|pause|resume|spawn|despawn)$/);
         if (!match) {
             console.warn('[babylon-debug] no sim command handler for', path);
             return;
@@ -42,6 +42,12 @@ const provider = {
                 break;
             case 'resume':
                 webview.postMessage('pause:0');
+                break;
+            case 'spawn':
+                webview.postMessage('spawn:1');
+                break;
+            case 'despawn':
+                webview.postMessage('despawn:1');
                 break;
             default:
                 console.warn('[babylon-debug] unhandled sim command', path);

@@ -1,6 +1,6 @@
 # Bonobo Engine — C# WASM 3D (Babylon.js + BepuPhysics2)
 
-C# browser-wasm monorepo: a pure C# game engine (`Game.Engine` with Arch ECS + BepuPhysics2), a Roslyn analyzer + source generator project (`Game.Engine.Generators`), a shared class library owning the Babylon.js frontend (`Game.UI`), a non-Blazor browser-wasm host (`Game.Wasm`), a WinUI 3 + WebView2 native-AOT desktop host (`Game.WinApp`), and a TypeScript-driven Babylon.js build managed by Vite and Tailwind CLI.
+C# browser-wasm monorepo: a pure C# game engine (`Game.Engine` with Arch ECS + BepuPhysics2), a Roslyn analyzer + source generator project (`Game.Engine.Generators`), a shared class library owning the Babylon.js frontend (`Game.UI`), a non-Blazor browser-wasm host (`Game.Wasm`), a WinUI 3 + WebView2 native-AOT desktop host (`Game.WinApp`), a binary world-config compiler (`Game.ConfigBuilder`), and a TypeScript-driven Babylon.js build managed by Vite and Tailwind CLI.
 
 Start with this project mainly because current monogame at 2026 don't have export to web option. Note that for real time games, authoritative ECS in server is not the best option by the http event process for each render update, so added a compilation conditional for single player games.
 
@@ -39,7 +39,7 @@ To make this architecture work without destroying performance, you must isolate 
 1. **The Core Simulation Engine (Pure C#)** — a standard .NET Class Library. It knows absolutely nothing about graphics, rendering, or browsers.
    - *State Management:* manages coordinates, stats, pathfinding matrices, and entity maps.
    - *The Deterministic Tick:* runs the Arch ECS systems each fixed step and emits one **batched** render signal per interval — not one event per entity — so the presentation layer mirrors authoritative state without per-frame interop.
-   - *Physics:* `BepuPhysics2` (vendored at `src/bepuphysics2`). The asteroids sim runs a 2D-plane court inside the 3D solver (z-locked pose integrator), with contact filtering via a `CollidableProperty<int>` category matrix and begin-touch accumulation in `INarrowPhaseCallbacks`. Never pass a `ThreadDispatcher` to `Simulation.Timestep` on the browser host.
+   - *Physics:* `BepuPhysics2` (vendored at `src/bepuphysics2`).
 2. **The Presentation Layer (Babylon.js v9 + Tailwind)** — a pure mirror of your C# state.
    - *Tailwind UI:* DOM overlays (menus, HUDs, inventory grids) on top of the canvas.
    - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float64Array` over the WASM heap in the browser and over a WebView2 shared buffer on desktop) and updates meshes/cameras per render frame — no per-entity interop calls.
@@ -58,9 +58,9 @@ BABYLON.JS v9                   meshes, thin instances, camera, particles, GPU
 ```
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
-- **Bridge status:** zero-copy shared memory pipeline implemented on both hosts: C# writes signal snapshots into a pinned `GCHandle` buffer (`PinnedRenderBuffer<T>`) → the browser host reads the `Float64Array` over the WASM heap via `[JSImport] notifyRender`; the desktop host copies the same span into a `CoreWebView2SharedBuffer` (`PostSharedBufferToScript`) and the page wraps it as a `Float64Array` (`docs/architecture/desktop-webview2.md`). Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`.
+- **Bridge status:** zero-copy shared memory pipeline implemented on both hosts: C# writes signal snapshots into a pinned `GCHandle` buffer (`PinnedRenderBuffer<T>`) → the browser host reads the `Float64Array` over the WASM heap via `[JSImport] notifyRender`; the desktop host copies the same span into a `CoreWebView2SharedBuffer` (`PostSharedBufferToScript`) and the page wraps it as a `Float64Array` (`docs/architecture/desktop-webview2.md`). Entity lifecycle (spawn/destroy) rides in the same record as a flag (`Transform3DState.Lifecycle`, stride 12), so mesh creation/disposal needs no per-entity interop. Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`.
 - **Domain ownership:** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
-- **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`).
+- **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`). Browser WASM threading (`WasmEnableThreads`) was spiked and **rejected** — build + AOT publish succeed, but every synchronous `[JSExport]` throws under the multi-threaded runtime (`docs/adr/ADR-012-wasm-multithreading.md`).
 
 Full matrices (ecosystem integration, implementation status, packages) live in `docs/architecture/topology.md`. Decisions: `docs/adr/`.
 
@@ -69,6 +69,9 @@ Full matrices (ecosystem integration, implementation status, packages) live in `
 ## 🛠️ Current Iteration Status
 
 - **Frontend:** `Frontend/game.ts` hosts the Babylon.js demo-balls scene (free camera + collisions, CannonJS physics arena, amiga-textured spheres, shadow-casting directional light) as the main page.
+- **ECS scene:** the float64 `transform3d` buffer drives a mesh pool, including entity lifecycle — the bottom-left **Spawn**/**Despawn** buttons queue commands and the sim flags new/doomed entities in the buffer (lifecycle `1`/`3`), so Babylon creates/disposes meshes without per-entity interop.
+- **Binary config:** `config/world.json` compiles to `assets/config.bin` (magic `BNBO` v1) with `dotnet run --project src/Game.ConfigBuilder`; both hosts load the same bytes and fall back to `GameWorldConfig.Default` when the file is missing.
+- **Dev loop:** `npm run dev` (in `src/Game.UI`) runs `dotnet watch` plus the Vite/Tailwind watchers and mirrors `dist`/`assets`/`audio`/`games` into `Game.Wasm/wwwroot` on change — `docs/architecture/dev-workflow.md`.
 - **Examples:** The WASM host stays as minimal interop bootstrap for future simulations.
 
 ## 🚀 Future-Proofing for Authoritative Multiplayer
@@ -90,17 +93,23 @@ Full matrices (ecosystem integration, implementation status, packages) live in `
 
 ```
 bonoboWebGame.slnx          # .NET solution (XML solution format)
+config/
+└── world.json             # Developer-facing world spec compiled into assets/config.bin
 src/
 ├── Game.Engine/            # Pure C# class library (authoritative simulation: Arch ECS + BepuPhysics2)
-│                           #   ECS/SimulationHost.cs — host-agnostic sim control + pinned buffers
+│   ├── ECS/SimulationHost.cs — host-agnostic sim control + pinned buffers
+│   └── Config/              # BinaryConfigReader (AOT-safe MemoryMarshal overlay, magic BNBO)
 ├── Game.Engine.Generators/ # Roslyn analyzer + source generator (zero-copy signal layout guardrails)
+├── Game.ConfigBuilder/     # config/world.json → Game.UI/wwwroot/assets/config.bin
 ├── Game.UI/                # Shared class library (Babylon.js frontend source + static assets)
 │   ├── Game.UIAssets.targets # Shared MSBuild asset pipeline used by every host (prune + copy + fail-fast)
+│   ├── scripts/dev.mjs     # `npm run dev`: dotnet watch + Vite/Tailwind watchers + asset mirror
 │   ├── wwwroot/dist/       # Vite + Tailwind output (generated, NOT tracked — run `npm run build`)
+│   ├── wwwroot/assets/     # Raw, unbundled game assets + generated config.bin (no npm packaging)
 │   └── Frontend/           # Babylon.js TypeScript entry (game.ts) + Tailwind CSS
 ├── Game.Wasm/              # browser-wasm host (non-Blazor; [JSImport]/[JSExport] interop, heap view)
 ├── Game.WinApp/            # Windows desktop host (WinUI 3 + WebView2 + Native AOT, shared buffers)
-├── Game.Tests/             # xUnit v3 tests (determinism, ECS, signal layout)
+├── Game.Tests/             # xUnit v3 tests (determinism, ECS, signal layout, binary config, lifecycle)
 ├── Game.Tests.Aot/         # TUnit AOT/trim pattern tests
 ├── Game.Tests.UI/          # Playwright E2E suite (Node — not in the .NET solution)
 ├── bepuphysics2/           # vendored C# physics library (authoritative)
@@ -109,7 +118,8 @@ src/
 └── Temp/                   # upstream samples/demos (not part of the build/solution)
 docs/
 ├── index.md                # Architecture source of truth
-├── architecture/           # topology.md, render-interpolation.md, desktop-webview2.md
+├── adr/                    # Architecture decision records (e.g. ADR-012 WASM threading)
+├── architecture/           # topology.md, render-interpolation.md, desktop-webview2.md, dev-workflow.md
 └── game-development/       # Curated engine-agnostic gamedev knowledge base
 AGENTS.md                   # Agent build/workflow rules
 ```
@@ -144,15 +154,13 @@ dotnet build bonoboWebGame.slnx
 dotnet run --project src/Game.Wasm    # serves http://localhost:5902 (see launchSettings.json)
 ```
 
-Open the URL in Chrome/Edge/Firefox — the Babylon.js demo-balls scene (CannonJS
-physics arena, amiga-textured spheres, free camera) renders fullscreen. No game
-examples or launch menu remain; the WASM host boots the interop bridge for future
-simulations.
+For iterative work use the one-terminal dev loop instead of steps 1–2 above: `cd src/Game.UI && npm run dev` runs `dotnet watch` together with the Vite and Tailwind watchers and mirrors the asset folders into `Game.Wasm/wwwroot` as they change (`docs/architecture/dev-workflow.md`).
+
+Open the URL in Chrome/Edge/Firefox — the Babylon.js demo-balls scene (Havok physics arena, amiga-textured spheres, free camera) renders fullscreen. The WASM host boots the interop bridge for future simulations.
 
 Render signals travel as pure 64-bit buffers: `DirectRenderTransport<TSignal, T>` encodes each batched signal into the canonical layout (`SignalBuffer.cs` — 8-byte doubles for `sprite-move` and `transform3d` alike), writes it into a pinned `GCHandle` array, and notifies JS via `[JSImport]("notifyRender")` — JS views it as a `Float64Array` over the WASM heap.
 
-For best raw sim throughput, publish with AOT (needs
-`dotnet workload install wasm-tools`; dev runs stay interpreted):
+For best raw sim throughput, publish with AOT (needs `dotnet workload install wasm-tools`; dev runs stay interpreted):
 
 ```powershell
 dotnet publish src/Game.Wasm -c Release   # RunAOTCompilation + WasmStripIL
@@ -169,6 +177,17 @@ dotnet run --project src/Game.WinApp                 # Debug window (unpackaged)
 dotnet publish src/Game.WinApp/Game.WinApp.csproj -c Release -r win-x64 -p:Platform=x64 -p:BuildFrontend=true
 # → src/Game.WinApp/bin/Release/net10.0-windows10.0.26100.0/win-x64/publish/Game.WinApp.exe (+ wwwroot/)
 ```
+
+### Raw Assets & Binary World Config
+
+Raw game assets (models, environments, textures, audio) live in `src/Game.UI/wwwroot/assets/` and are copied **verbatim** into every host by the shared asset pipeline — no npm packaging, no content hashing, so paths like `assets/level1.glb` stay identical in dev and publish. The only generated file there is `config.bin`:
+
+```powershell
+# config/world.json → src/Game.UI/wwwroot/assets/config.bin (magic BNBO, version 1, 88 bytes)
+dotnet run --project src/Game.ConfigBuilder
+```
+
+Both hosts load the same bytes: the browser `main.mjs` fetches them and calls the `LoadConfiguration` `[JSExport]`; `Game.WinApp` reads them from `wwwroot/assets` at startup. The reader is `Game.Engine.Config.BinaryConfigReader` (pure `MemoryMarshal` overlay — Native AOT safe). Missing or invalid file is not fatal: the engine falls back to `GameWorldConfig.Default`.
 
 ### How to Build a Multiplayer (Server-Authoritative) Bundle
 
@@ -190,11 +209,11 @@ dotnet build bonoboWebGame.slnx
 dotnet test          # Game.Tests (xUnit v3) + Game.Tests.Aot (TUnit); Playwright suite is separate (src/Game.Tests.UI)
 ```
 
-> Build frontend assets before .NET commands (`src/Game.UI/wwwroot/dist` is untracked). Do not run multiple `dotnet` commands concurrently — static-web-asset compression can race. See `AGENTS.md` for the full command reference.
+> Build frontend assets before .NET commands (`src/Game.UI/wwwroot/dist` is untracked). Do not run multiple `dotnet` commands concurrently — static-web-asset compression can race. See `AGENTS.md` for the full command reference and `docs/architecture/dev-workflow.md` for the watcher loop.
 
 ## Games and Examples
 
-The default page renders the Babylon.js demo-balls scene; the ECS scene renders 12 spheres driven by the float64 `transform3d` buffer. Future games plug into the same shared-memory bridge kept in `Game.Engine.ECS.SimulationHost` (pinned buffers + `BufferNotify`), consumed by `Game.Wasm` (heap view) and `Game.WinApp` (WebView2 shared buffers).
+The default page renders the Babylon.js demo-balls scene; the ECS scene renders spheres driven by the float64 `transform3d` buffer (initial count and arena come from `config.bin`). The scene's **Spawn**/**Despawn** buttons exercise the lifecycle flags end-to-end; the same commands are reachable from tests/tools as `window.__simCommand('/api/transform3d/spawn' | '/api/transform3d/despawn')`. Future games plug into the same shared-memory bridge kept in `Game.Engine.ECS.SimulationHost` (pinned buffers + `BufferNotify`), consumed by `Game.Wasm` (heap view) and `Game.WinApp` (WebView2 shared buffers).
 
 ## Licensing
 

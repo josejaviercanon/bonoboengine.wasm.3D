@@ -31,10 +31,61 @@ public sealed class SimulationHost : IDisposable
 
     private EcsSimulation? _ecs;
     private Transform3DEcsSimulation? _transform3d;
+    private Game.Engine.Config.GameWorldConfig? _worldConfig;
 
     public SimulationHost(BufferNotify notify)
     {
         _notify = notify;
+    }
+
+    /// <summary>
+    ///     Last configuration load error (null when the last load succeeded or nothing was
+    ///     loaded yet). The engine falls back to <c>GameWorldConfig.Default</c>.
+    /// </summary>
+    public string? ConfigurationError { get; private set; }
+
+    /// <summary>
+    ///     Parses <c>assets/config.bin</c> bytes supplied by the host (browser fetch or
+    ///     native file read) and applies them to future simulations. Returns false and keeps
+    ///     the defaults when the payload is invalid; <see cref="ConfigurationError"/> explains why.
+    /// </summary>
+    public bool LoadConfiguration(ReadOnlySpan<byte> bytes)
+    {
+        if (Game.Engine.Config.BinaryConfigReader.TryRead(bytes, out var config, out var error))
+        {
+            lock (_sync)
+            {
+                _worldConfig = config;
+            }
+
+            ConfigurationError = null;
+            return true;
+        }
+
+        ConfigurationError = error;
+        return false;
+    }
+
+    /// <summary>Queues one 3D entity spawn (no-op when the transform3d sim is not connected).</summary>
+    public bool SpawnTransform3D()
+    {
+        lock (_sync)
+        {
+            if (_transform3d is null) return false;
+            _transform3d.Spawn();
+            return true;
+        }
+    }
+
+    /// <summary>Queues removal of the most recently spawned 3D entity.</summary>
+    public bool DespawnTransform3D()
+    {
+        lock (_sync)
+        {
+            if (_transform3d is null) return false;
+            _transform3d.Despawn();
+            return true;
+        }
     }
 
     private PinnedRenderBuffer<T> CreateBuffer<T>(string eventName, int capacity)
@@ -67,6 +118,7 @@ public sealed class SimulationHost : IDisposable
             CreateBuffer<double>("sprite-move", EcsBufferCapacity)));
 
     public Transform3DEcsSimulation Transform3D => _transform3d ??= new Transform3DEcsSimulation(
+        _worldConfig,
         new DirectRenderTransport<Transform3DRenderSignal, double>(
             "transform3d",
             SignalBufferEncoders.ElementLength,

@@ -59,16 +59,18 @@
            Text="Frontend bundle '$(GameUISourceDir)\dist\game-bundle.js' is missing. Run 'npm ci &amp;&amp; npm run build' in src/Game.UI (or build with -p:BuildFrontend=true)." />
 
     <!-- Prune before copying: dist chunk hashes change on every Vite build. -->
-    <RemoveDir Directories="$(GameUIDestDir)\dist;$(GameUIDestDir)\audio;$(GameUIDestDir)\games" />
+    <RemoveDir Directories="$(GameUIDestDir)\dist;$(GameUIDestDir)\assets;$(GameUIDestDir)\audio;$(GameUIDestDir)\games" />
 
     <ItemGroup>
       <_GameUIDist Include="$(GameUISourceDir)\dist\**\*" />
+      <_GameUIRawAssets Include="$(GameUISourceDir)\assets\**\*" />
       <_GameUIAudio Include="$(GameUISourceDir)\audio\**\*" />
       <_GameUIGames Include="$(GameUISourceDir)\games\**\*" />
       <_GameUIRootFile Include="$(GameUISourceDir)\background.png" />
     </ItemGroup>
 
     <Copy SourceFiles="@(_GameUIDist)" DestinationFiles="@(_GameUIDist->'$(GameUIDestDir)\dist\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_GameUIRawAssets)" DestinationFiles="@(_GameUIRawAssets->'$(GameUIDestDir)\assets\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(_GameUIAudio)" DestinationFiles="@(_GameUIAudio->'$(GameUIDestDir)\audio\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(_GameUIGames)" DestinationFiles="@(_GameUIGames->'$(GameUIDestDir)\games\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(_GameUIRootFile)" DestinationFolder="$(GameUIDestDir)" SkipUnchangedFiles="true" />

@@ -31,6 +31,28 @@ public static partial class WasmInterop
         _simHost.SetPaused(paused);
     }
 
+    /// <summary>
+    ///     Receives <c>assets/config.bin</c> bytes fetched by the JS bootstrap. One-time,
+    ///     low-frequency, primitive payload — never part of the per-frame path.
+    /// </summary>
+    [JSExport]
+    internal static void LoadConfiguration([JSMarshalAs<JSType.Array<JSType.Number>>] byte[] data)
+    {
+        _simHost.LoadConfiguration(data);
+    }
+
+    [JSExport]
+    internal static void SpawnEntity()
+    {
+        _simHost.SpawnTransform3D();
+    }
+
+    [JSExport]
+    internal static void DespawnEntity()
+    {
+        _simHost.DespawnTransform3D();
+    }
+
     /// <summary>Forwarded to JS after every committed buffer (scalar elements are always float64).</summary>
     private static void Notify(string eventName, nint bufferPtr, int elementCount)
     {

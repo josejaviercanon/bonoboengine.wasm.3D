@@ -1,0 +1,3 @@
+# Raw, unbundled game assets (models, environments, textures, audio, config.bin).
+# Vite never touches this folder: Game.UIAssets.targets copies it into every host's
+# wwwroot verbatim, so asset paths survive the build unchanged.

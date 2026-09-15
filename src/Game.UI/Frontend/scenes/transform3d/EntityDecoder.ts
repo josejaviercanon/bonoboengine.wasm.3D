@@ -21,7 +21,8 @@ export interface Transform3DSnapshot {
  * `Float64Array` (pinned at compile time by the generated `ScalarArray` type).
  *
  * Layout (per Transform3DState): id + position (x, y, z) + rotation quaternion
- * (qx, qy, qz, qw) + scale (sx, sy, sz), stride 11 after the 6-element header.
+ * (qx, qy, qz, qw) + scale (sx, sy, sz) + lifecycle flag, stride 12 after the
+ * 6-element header.
  */
 export function decodeTransform3D(values: ScalarArray): Transform3DSnapshot {
     const seq = values[0];
@@ -45,6 +46,7 @@ export function decodeTransform3D(values: ScalarArray): Transform3DSnapshot {
             sx: values[base + 8],
             sy: values[base + 9],
             sz: values[base + 10],
+            lifecycle: values[base + 11],
         });
     }
 

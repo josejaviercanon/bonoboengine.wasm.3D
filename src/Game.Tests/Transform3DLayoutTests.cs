@@ -13,7 +13,7 @@ public class Transform3DLayoutTests
     [Fact]
     public void Transform3D_Stride_And_Scalar_Size_Match_Generated_Layout()
     {
-        Assert.Equal(11, SignalBufferLayout.Transform3DStride);
+        Assert.Equal(12, SignalBufferLayout.Transform3DStride);
         Assert.Equal(sizeof(double), SignalBufferLayout.Transform3DScalarSize);
         Assert.Equal(SignalBufferLayout.Transform3DStride, GeneratedSignalLayout.Transform3DStateStride);
         Assert.Equal(SignalBufferLayout.Transform3DScalarSize, GeneratedSignalLayout.Transform3DStateScalarSize);
@@ -72,8 +72,8 @@ public class Transform3DLayoutTests
     {
         var states = new[]
         {
-            new Transform3DState(3, 1, 2, 3, 0, 0, 0, 1, 2, 2, 2),
-            new Transform3DState(7, -4, 5, 6, 0, 0, 0.7071, 0.7071, 1, 1, 1),
+            new Transform3DState(3, 1, 2, 3, 0, 0, 0, 1, 2, 2, 2, EntityLifecycle3.Active),
+            new Transform3DState(7, -4, 5, 6, 0, 0, 0.7071, 0.7071, 1, 1, 1, EntityLifecycle3.Destroyed),
         };
         var signal = new Transform3DRenderSignal(42, states.Length, 16.67, states);
 
@@ -83,7 +83,7 @@ public class Transform3DLayoutTests
         Assert.Equal(42d, values[SignalBuffer.HeaderSeq]);
         Assert.Equal(0d, values[SignalBuffer.HeaderEpoch]);
         Assert.Equal(2d, values[SignalBuffer.HeaderEntityCount]);
-        Assert.Equal(11d, values[SignalBuffer.HeaderStride]);
+        Assert.Equal(12d, values[SignalBuffer.HeaderStride]);
         Assert.Equal(16.67d, values[SignalBuffer.HeaderTickMs]);
         Assert.InRange(values[SignalBuffer.HeaderStepMs], 16d, 17d);
 
@@ -97,6 +97,7 @@ public class Transform3DLayoutTests
         Assert.Equal(2d, values[b0 + 8]);
         Assert.Equal(2d, values[b0 + 9]);
         Assert.Equal(2d, values[b0 + 10]);
+        Assert.Equal(EntityLifecycle3.Active, values[b0 + 11]);
 
         var b1 = b0 + stride;
         Assert.Equal(7d, values[b1]);
@@ -106,6 +107,7 @@ public class Transform3DLayoutTests
         Assert.Equal(0.7071d, values[b1 + 6], 4);
         Assert.Equal(0.7071d, values[b1 + 7], 4);
         Assert.Equal(1d, values[b1 + 10]);
+        Assert.Equal(EntityLifecycle3.Destroyed, values[b1 + 11]);
     }
 
     [Fact]
@@ -113,13 +115,13 @@ public class Transform3DLayoutTests
     {
         var one = new Transform3DRenderSignal(1, 1, 16.67, new[]
         {
-            new Transform3DState(0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1),
+            new Transform3DState(0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, EntityLifecycle3.Active),
         });
         var three = new Transform3DRenderSignal(1, 3, 16.67, new[]
         {
-            new Transform3DState(0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1),
-            new Transform3DState(1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1),
-            new Transform3DState(2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1),
+            new Transform3DState(0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, EntityLifecycle3.Active),
+            new Transform3DState(1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, EntityLifecycle3.Active),
+            new Transform3DState(2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, EntityLifecycle3.Active),
         });
 
         Assert.Equal(

@@ -100,3 +100,27 @@ public struct AngularVelocity3
         Z = z;
     }
 }
+
+/// <summary>
+///     Lifecycle flags carried in the 12th scalar of <see cref="Transform3DState"/> so the
+///     Babylon.js side can instantiate/dispose meshes without per-entity interop calls.
+///     Destroyed entities are emitted one final time with <see cref="Destroyed"/> before
+///     the Arch entity is removed.
+/// </summary>
+public static class EntityLifecycle3
+{
+    public const double Active = 0d;
+    public const double Spawned = 1d;
+    public const double Destroyed = 3d;
+}
+
+/// <summary>
+///     Per-entity lifecycle state, reset to <see cref="EntityLifecycle3.Active"/> after the
+///     tick that emitted it. Not a render-state struct: the value crosses the boundary
+///     through <see cref="Transform3DState.Lifecycle"/>.
+/// </summary>
+[Component]
+public struct RenderLifecycle3
+{
+    public double State;
+}

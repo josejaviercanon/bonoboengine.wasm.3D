@@ -45,8 +45,9 @@ export interface Transform3DState {
     sx: number;
     sy: number;
     sz: number;
+    lifecycle: number;
 }
-export const Transform3DStateStride = 11;
+export const Transform3DStateStride = 12;
 export const Transform3DStateScalarSize = 8;
-export const Transform3DStateByteLength = 88;
+export const Transform3DStateByteLength = 96;
 

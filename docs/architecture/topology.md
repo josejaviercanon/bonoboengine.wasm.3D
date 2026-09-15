@@ -44,7 +44,7 @@ Rule: never move simulation back-and-forth through JS interop every frame. The s
 
 **Deprecated:** `GET /api/ecs/stream` SSE pushing `event: sprite-move` with batched `SpriteState[]` JSON — the legacy transport, superseded by the pinned-buffer path (retained only in the opt-in multiplayer `--mode web` / `npm run build:web` build).
 
-The canonical layout lives in `Game.Engine.ECS.SignalBuffer.cs` (`SignalBuffer` + `SignalBufferLayout` + `SignalBufferEncoders`): a six-element header (`seq, epoch, entityCount, stride, stepMs, tickMs`) + entity records, with pure 64-bit scalar elements — `sprite-move` is float64 (`SpriteState`, stride 6), `transform3d` is float64 (`Transform3DState`, stride 11: id + position + quaternion + scale). The C# and TS halves are kept in lockstep by `src/Game.Engine.Generators` — see "Zero-Copy Layout Guardrails" below.
+The canonical layout lives in `Game.Engine.ECS.SignalBuffer.cs` (`SignalBuffer` + `SignalBufferLayout` + `SignalBufferEncoders`): a six-element header (`seq, epoch, entityCount, stride, stepMs, tickMs`) + entity records, with pure 64-bit scalar elements — `sprite-move` is float64 (`SpriteState`, stride 6), `transform3d` is float64 (`Transform3DState`, stride 12: id + position + quaternion + scale + lifecycle flag). The C# and TS halves are kept in lockstep by `src/Game.Engine.Generators` — see "Zero-Copy Layout Guardrails" below.
 
 ## Zero-Copy Layout Guardrails
 
@@ -125,7 +125,12 @@ The Babylon.js v9 stack is declared in `src/Game.UI/package.json`: `@babylonjs/c
 | Babylon.js main page scene (`initGame`, canvas, FreeCamera + CannonJS arena, amiga spheres) | Implemented (main page) |
 | BepuPhysics2 authoritative physics in ECS loop (Asteroids: sphere bodies, contact events, wrap, 2D plane) | Implemented |
 | Per-game Babylon renderers (buffer consumers, thin instances) | Partial: `sceneECS` consumes the float64 `transform3d` buffer into a mesh pool; thin instances + per-game scenes are Target |
-| 3D transform layout (position + quaternion + scale, `Transform3DState`) | Implemented — float64 (`Float64Array`), stride 11, validated by `Game.Engine.Generators` |
+| 3D transform layout (position + quaternion + scale + lifecycle flag, `Transform3DState`) | Implemented — float64 (`Float64Array`), stride 12, validated by `Game.Engine.Generators` |
+| Entity lifecycle over the shared buffer (spawn/despawn queued outside Arch queries; flags `1`/`3` on the 12th scalar; TS disposes/hides meshes) | Implemented |
+| Binary world configuration (`config/world.json` → `assets/config.bin`, magic `BNBO` v1) | Implemented — AOT-safe `Game.Engine.Config.BinaryConfigReader` (`MemoryMarshal`); browser fetch + WinApp file read; `Game.ConfigBuilder` writer |
+| Raw asset pipeline (`wwwroot/assets/**` copied verbatim by `Game.UIAssets.targets` alongside `dist`/`audio`/`games`) | Implemented |
+| Dev loop (`npm run dev`: `dotnet watch` + Vite/Tailwind watchers + asset mirror) | Implemented — `docs/architecture/dev-workflow.md` |
+| Browser threading (`WasmEnableThreads`) | Rejected — ADR-012 spike: threads build + AOT publish succeed but synchronous `[JSExport]` verbs throw `Cannot call synchronous C# methods.` |
 | Render transport seam: `IRenderTransport<TSignal>` injected into all sims, `ServerRenderTransport` default, `SINGLE_PLAYER_LOCAL` build switches in `Game.Engine.csproj` | Implemented |
 | Single-player-local default: `SINGLE_PLAYER_LOCAL` + `local-buffer` are the default builds; `fetch` POST exists only in the `--mode web` / `npm run build:web` multiplayer branch | Implemented |
 | `Game.Wasm` co-located host: `PinnedRenderBuffer<T>` + `DirectRenderTransport<TSignal, T>` (zero-copy: pinned `GCHandle` → `[JSImport] notifyRender(ptr, count)` → JS reads `Float64Array` over the WASM heap), typed `[JSExport]` commands, `wasm-interop.js` provider. | Implemented |

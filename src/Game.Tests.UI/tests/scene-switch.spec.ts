@@ -62,6 +62,24 @@ test.describe('scene switcher', () => {
       `${p2!.x.toFixed(2)},${p2!.y.toFixed(2)},${p2!.z.toFixed(2)},${p2!.s.toFixed(3)}`
     );
 
+    // Lifecycle: spawn adds one visible mesh, despawn removes the newest one.
+    const visibleEcsMeshCount = () =>
+      page.evaluate(() => {
+        const s = (window as unknown as { __scene: { meshes: Array<{ name: string; isVisible: boolean }> } }).__scene;
+        return s ? s.meshes.filter((m) => m.name.startsWith('ecs-entity') && m.isVisible).length : 0;
+      });
+    const postSimCommand = (path: string) =>
+      page.evaluate((command) => {
+        (window as unknown as { __simCommand: (p: string) => void }).__simCommand(command);
+      }, path);
+
+    const meshCountBeforeSpawn = await visibleEcsMeshCount();
+    await postSimCommand('/api/transform3d/spawn');
+    await expect.poll(visibleEcsMeshCount, { timeout: 15_000 }).toBe(meshCountBeforeSpawn + 1);
+
+    await postSimCommand('/api/transform3d/despawn');
+    await expect.poll(visibleEcsMeshCount, { timeout: 15_000 }).toBe(meshCountBeforeSpawn);
+
     // Reload ECS: sim restarts fresh (entity 0 back near spawn) and still animates.
     await clickButton(34);
     await page.waitForTimeout(500);

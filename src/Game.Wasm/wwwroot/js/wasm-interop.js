@@ -30,7 +30,7 @@ export function setupProvider(exports) {
         postCommand(path) {
             // Command routing: `/api/{gameKey}/connect` (and future `/api/{gameKey}/...`)
             // dispatches in-process to SimHost — zero HTTP, zero serialization.
-            const match = path.match(/^\/api\/([a-z0-9-]+)\/(connect|start|reset|pause|resume)$/);
+            const match = path.match(/^\/api\/([a-z0-9-]+)\/(connect|start|reset|pause|resume|spawn|despawn)$/);
             if (!match) {
                 console.warn('[babylon-debug] no sim command handler for', path);
                 return;
@@ -47,6 +47,14 @@ export function setupProvider(exports) {
             }
             if (verb === 'resume' && typeof bridge.SetPaused === 'function') {
                 bridge.SetPaused(false);
+                return;
+            }
+            if (verb === 'spawn' && typeof bridge.SpawnEntity === 'function') {
+                bridge.SpawnEntity();
+                return;
+            }
+            if (verb === 'despawn' && typeof bridge.DespawnEntity === 'function') {
+                bridge.DespawnEntity();
                 return;
             }
             console.warn('[babylon-debug] unhandled sim command', path);

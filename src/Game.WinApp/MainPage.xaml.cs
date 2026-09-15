@@ -37,7 +37,35 @@ public sealed partial class MainPage : Page
         InitializeComponent();
 
         _simHost = new SimulationHost(OnBufferCommitted);
+        LoadWorldConfiguration();
         _ = InitializeBabylonEngineAsync();
+    }
+
+    /// <summary>
+    ///     Native counterpart of the browser host's <c>assets/config.bin</c> fetch: the file
+    ///     sits next to the binary under <c>wwwroot/assets</c>. Missing or invalid payloads
+    ///     fall back to <see cref="Game.Engine.Config.GameWorldConfig.Default"/>.
+    /// </summary>
+    private void LoadWorldConfiguration()
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "wwwroot", "assets", "config.bin");
+            if (!File.Exists(path))
+            {
+                Debug.WriteLine($"config.bin not found at '{path}' — engine defaults in use");
+                return;
+            }
+
+            if (_simHost.LoadConfiguration(File.ReadAllBytes(path)))
+                Debug.WriteLine("config.bin applied");
+            else
+                Debug.WriteLine($"config.bin rejected: {_simHost.ConfigurationError} — defaults in use");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"config load failed: {ex}");
+        }
     }
 
     private async Task InitializeBabylonEngineAsync()
@@ -96,6 +124,12 @@ public sealed partial class MainPage : Page
                 break;
             case "pause":
                 _simHost.SetPaused(value == "1");
+                break;
+            case "spawn":
+                _simHost.SpawnTransform3D();
+                break;
+            case "despawn":
+                _simHost.DespawnTransform3D();
                 break;
             default:
                 Debug.WriteLine($"Unhandled page command: {message}");

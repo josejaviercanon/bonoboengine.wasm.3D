@@ -20,6 +20,8 @@ declare global {
         /** `initialScene` defaults to 'singlePlayer'; the desktop host boots 'ecs'. */
         initGame: (containerId: string, initialScene?: SceneName) => Promise<void>;
         registerLocalBufferProvider: (provider: LocalBufferProvider) => void;
+        /** Low-frequency sim command hook (`/api/{game}/{verb}`) for tests and tooling. */
+        __simCommand: (path: string) => void;
         __spector: unknown;
         __scene: unknown;
     }
@@ -179,6 +181,9 @@ window.initGame = initGame;
 // The co-located Game.Wasm host registers its in-process
 // command/signal bridge through this global (see wwwroot/index.html of that host).
 window.registerLocalBufferProvider = registerLocalBufferProvider;
+
+// Test/agent hook: same command path the Babylon GUI buttons use.
+window.__simCommand = postCommandToSim;
 
 // Module evaluation finished — all globals above exist. The Game.Wasm host
 // listens for this event instead of polling for registerLocalBufferProvider.

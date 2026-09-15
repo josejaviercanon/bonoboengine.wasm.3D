@@ -12,6 +12,7 @@
     -->
     <Project Path="src/Game.UI/Game.UI.csproj" />
     <Project Path="src/Game.Wasm/Game.Wasm.csproj" />
+    <Project Path="src/Game.ConfigBuilder/Game.ConfigBuilder.csproj" />
     <!-- Windows desktop host: WinUI 3 + WebView2 + Native AOT (WindowsAppSDK, no MAUI workload).
          Publish: dotnet publish src/Game.WinApp/Game.WinApp.csproj -c Release -r win-x64 -->
     <Project Path="src/Game.WinApp/Game.WinApp.csproj" />
