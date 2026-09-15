@@ -14,8 +14,8 @@ namespace Game_WinApp;
 ///     through WebView2 shared buffers (see <see cref="SharedBufferChannel"/>).
 ///
 ///     Channel contract with the page (see <c>wwwroot/js/webview-bridge.js</c>):
-///       host → script  sharedbufferreceived (+ {channel, seq, elementCount, scalarSize} JSON)
-///                      → typed array view over shared memory, released after dispatch
+///       host → script  sharedbufferreceived (+ {channel, seq, elementCount} JSON)
+///                      → Float64Array view over shared memory, released after dispatch
 ///       script → host  "connect:{game}" | "pause:1" | "pause:0"
 /// </summary>
 public sealed partial class MainPage : Page
@@ -30,7 +30,7 @@ public sealed partial class MainPage : Page
     private CoreWebView2? _core;
     private int _flushQueued;
 
-    private readonly record struct PendingFrame(nint Pointer, int ElementCount, int ScalarSize);
+    private readonly record struct PendingFrame(nint Pointer, int ElementCount);
 
     public MainPage()
     {
@@ -107,11 +107,11 @@ public sealed partial class MainPage : Page
     ///     Simulation callback (timer thread): coalesce to the newest frame per channel and
     ///     marshal onto the UI thread, where the WebView2 shared buffers live.
     /// </summary>
-    private void OnBufferCommitted(string eventName, nint bufferPtr, int elementCount, int scalarSize)
+    private void OnBufferCommitted(string eventName, nint bufferPtr, int elementCount)
     {
         lock (_pendingSync)
         {
-            _pending[eventName] = new PendingFrame(bufferPtr, elementCount, scalarSize);
+            _pending[eventName] = new PendingFrame(bufferPtr, elementCount);
         }
 
         if (Interlocked.Exchange(ref _flushQueued, 1) != 0) return;
@@ -143,7 +143,7 @@ public sealed partial class MainPage : Page
             {
                 if (!_channels.TryGetValue(eventName, out var channel))
                 {
-                    channel = new SharedBufferChannel(core, eventName, frame.ScalarSize, CapacityFor(eventName, frame.ElementCount));
+                    channel = new SharedBufferChannel(core, eventName, CapacityFor(eventName, frame.ElementCount));
                     _channels[eventName] = channel;
                 }
 

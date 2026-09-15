@@ -7,10 +7,11 @@ using Game.Engine.Interop;
 namespace Game.Engine.ECS;
 
 /// <summary>
-///     Plain-data snapshot of one entity, serialized into the shared-memory float32
-///     "sprite-move" buffer (2D sprites keep float32; the 3D transform signal is float64).
+///     Plain-data snapshot of one entity, serialized into the shared-memory float64
+///     "sprite-move" buffer. All signal buffers are pure 64-bit (double) — the shared
+///     buffer ABI has no per-signal scalar size anymore.
 /// </summary>
-[TypeScriptExport(6, Precision = ScalarPrecision.Float32)]
+[TypeScriptExport(6, Precision = ScalarPrecision.Float64)]
 public record struct SpriteState(int Id, float X, float Y, byte R, byte G, byte B);
 
 /// <summary>Batched render signal emitted at most once per <see cref="EcsSimulation.SignalIntervalSeconds"/>.</summary>

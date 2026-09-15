@@ -18,7 +18,7 @@ internal sealed class ExportTarget
     public string Namespace = string.Empty;
     public int DeclaredStride;
     public int ComputedStride;
-    public int ScalarSize = InteropNames.Float32Size;
+    public int ScalarSize = InteropNames.Float64Size;
     public List<ExportMember> Members = new();
 }
 
@@ -26,13 +26,13 @@ internal sealed class ExportTarget
 ///     Shared layout math for the analyzer and generator. Every scalar field widens to
 ///     exactly one element in the signal buffer (ids, bytes and bools ride in the scalar
 ///     type — see <c>SignalBuffer</c>), so the stride of a struct is simply the count of its
-///     fields; the scalar element type (4-byte float or 8-byte double) comes from the
+///     fields; the scalar element type (8-byte double by default) comes from the
 ///     attribute's <c>Precision</c>. This mirrors the encoding performed by
 ///     <c>SignalBufferEncoders</c>.
 /// </summary>
 internal static class StructLayoutInspector
 {
-    /// <summary>Reads the declared <c>Precision</c> named argument; Float32 when absent.</summary>
+    /// <summary>Reads the declared <c>Precision</c> named argument; Float64 when absent.</summary>
     public static int GetScalarSize(AttributeData attribute)
     {
         foreach (var named in attribute.NamedArguments)
@@ -43,7 +43,7 @@ internal static class StructLayoutInspector
                 return size;
         }
 
-        return InteropNames.Float32Size;
+        return InteropNames.Float64Size;
     }
 
     /// <summary>Precision identifier used by generated C#/TypeScript constants.</summary>

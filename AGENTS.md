@@ -1,6 +1,6 @@
 # Agent Directives: bonoboengine.wasm.3D Architecture
 
-**Directive:** Agents must never implement per-entity draw calls, individual DOM queries, or inefficient JSON string serialization loops for 3D rendering. All high-frequency 3D transformation data must utilize zero-copy memory buffers, mapping pinned C# transform structures directly to Babylon.js mesh transforms via a single `Float32Array`/`Float64Array` view — over the WebAssembly heap (`localHeapViewF32/F64`) in the browser host, or over a WebView2 shared buffer (`PostSharedBufferToScript`) in the desktop host.
+**Directive:** Agents must never implement per-entity draw calls, individual DOM queries, or inefficient JSON string serialization loops for 3D rendering. All high-frequency 3D transformation data must utilize zero-copy memory buffers, mapping pinned C# transform structures directly to Babylon.js mesh transforms via a single `Float64Array` view — over the WebAssembly heap (`localHeapViewF64`) in the browser host, or over a WebView2 shared buffer (`PostSharedBufferToScript`) in the desktop host.
 
 **Directive:** Agents must never serialize entity transform states into JSON, UTF-8 strings, or managed array clones during high-frequency execution loops. All spatial coordinates, velocities, and rotation data must cross the C#↔JS boundary using raw, pinned memory pointers or shared memory buffers exported by C# interop.
 
@@ -34,7 +34,7 @@
 
 * **Description:** Single-player and local-buffer rendering states must cross the C#↔JS boundary using zero-copy pinned memory buffers on every host.
 * **Enforcement:** Allocate transformation buffers using `GCHandle.Alloc(..., GCHandleType.Pinned)` in C# (`PinnedRenderBuffer<T>`, `T` = `float` or `double`) and expose the same memory to script:
-  * **Game.Wasm (browser):** project a `Float32Array`/`Float64Array` view over `localHeapViewF32()`/`localHeapViewF64()` in `js/wasm-interop.js`; never re-encode or copy.
+  * **Game.Wasm (browser):** project a `Float64Array` view over `localHeapViewF64()` in `js/wasm-interop.js`; never re-encode or copy.
   * **Game.WinApp (desktop):** write the pinned span into a `CoreWebView2SharedBuffer` and call `PostSharedBufferToScript(..., ReadOnly, metadata)`; script reads the same mapping as `Float64Array` via `sharedbufferreceived` and calls `chrome.webview.releaseBuffer` after dispatch. Note: `PostWebMessageAsArrayBuffer` does **not** exist in the WebView2 API surface.
   * Never JSON-serialize transforms, never clone arrays, never make per-entity interop calls.
 
@@ -46,7 +46,7 @@
 ### FLOAT_LAYOUT_SYNC
 
 * **Description:** The C# signal layout (`SignalBufferLayout` strides + scalar sizes in `Game.Engine.ECS.SignalBuffer.cs`) and the TypeScript decoders (generated `Frontend/scenes/generated/signalLayout.ts` + per-scene `EntityDecoder`s) must never drift.
-* **Enforcement:** Mark every render-state record struct with `[TypeScriptExport(elementStride)]`, declaring `Precision = ScalarPrecision.Float32` (default, 4-byte elements, e.g. `SpriteState`) or `ScalarPrecision.Float64` (8-byte elements, e.g. `Transform3DState`). The `Game.Engine.Generators` project validates it three ways: a Roslyn analyzer errors on stride mismatch (`BNOBO001`) and unsupported field types (`BNOBO002`), warns on 64-bit integers in float64 structs (`BNOBO003`); an incremental source generator emits `GeneratedSignalLayout` (`*Stride`, `*ScalarSize`, `*ByteLength`) + a `[ModuleInitializer]` static assert that cross-checks them against `SignalBufferLayout` at boot (WASM and WinApp); the same generator writes the TypeScript half (`ScalarArray`, `ScalarSizes`, per-struct strides/scalar sizes). Never hand-maintain stride or scalar-size numbers anywhere else. The 3D transform layout (position + quaternion + scale, `Transform3DState`) must be used for 3D entities.
+* **Enforcement:** Mark every render-state record struct with `[TypeScriptExport(elementStride)]`, declaring `Precision = ScalarPrecision.Float64` (default, 8-byte elements) — the shared-memory ABI is pure 64-bit, there is no scalar-size field or per-signal width. The `Game.Engine.Generators` project validates it three ways: a Roslyn analyzer errors on stride mismatch (`BNOBO001`) and unsupported field types (`BNOBO002`), warns on 64-bit integers in float64 structs (`BNOBO003`); an incremental source generator emits `GeneratedSignalLayout` (`*Stride`, `*ScalarSize`, `*ByteLength`) + a `[ModuleInitializer]` static assert that cross-checks them against `SignalBufferLayout` at boot (WASM and WinApp); the same generator writes the TypeScript half (`ScalarArray`, `ScalarSizes`, per-struct strides/scalar sizes). Never hand-maintain stride or scalar-size numbers anywhere else. The 3D transform layout (position + quaternion + scale, `Transform3DState`) must be used for 3D entities.
 
 ### ECS_PHYSICS_MAPPING
 
@@ -87,7 +87,7 @@ The engine separates performance-critical simulation logic from presentation and
 To minimize serialization latency and prevent garbage collection pressure across the WebAssembly boundary, all communication must adhere to strict rules:
 
 * **Zero polling rule:** Polling state across the interop boundary per frame via JSON or string serialization is strictly prohibited. Communication must be **event-driven, shared-memory bound, or streamed via batched deltas**.
-* **Shared-heap transform bridge:** High-frequency transform updates occur with zero interop overhead by allowing JavaScript `Float32Array`/`Float64Array` views to read pinned C# transform buffers directly from the WASM memory heap (`localHeapViewF32/F64`), or from a WebView2 shared buffer on desktop.
+* **Shared-heap transform bridge:** High-frequency transform updates occur with zero interop overhead by allowing JavaScript `Float64Array` views to read pinned C# transform buffers directly from the WASM memory heap (`localHeapViewF64`), or from a WebView2 shared buffer on desktop.
 * **Primitive-first events:** Low-frequency events (e.g., UI interactions, entity spawning) must only pass primitive types (`int`, `float`, `bool`) using `[JSImport]` and `[JSExport]`.
 
 ---
@@ -131,7 +131,7 @@ public static void MainLoopTick(float deltaTime)
 | **Simulation & Physics** | C# (Arch ECS / BepuPhysics2 / .NET WASM) | Game rules, entity states, 3D rigid body collisions and dynamics. | Locked to target tick rate (e.g., 60 Hz fixed timestep). |
 | **Graphics Pipeline** | TypeScript (Babylon.js v9 / WebGL2 / WebGPU) | Mesh rendering, scene graph, cameras, particles. | Frame-synchronized with browser `requestAnimationFrame`. |
 | **Complex UI Layer** | Tailwind CSS / Vite / TypeScript | Menus, HUDs, inventory grids, configuration panels. | Event-driven (DOM-rendered on demand). |
-| **Shared Memory Bridge** | Pinned `GCHandle` & `Float32Array`/`Float64Array` view | Zero-copy 3D transform and coordinate synchronization (WASM heap view; WebView2 shared buffer on desktop). | Direct memory read per render frame. |
+| **Shared Memory Bridge** | Pinned `GCHandle` & `Float64Array` view | Zero-copy 3D transform and coordinate synchronization (WASM heap view; WebView2 shared buffer on desktop). | Direct memory read per render frame. |
 
 ---
 
@@ -146,7 +146,7 @@ public static void MainLoopTick(float deltaTime)
 - `src/Game.Tests.UI` is the Node/TypeScript Playwright E2E suite. Not a `.csproj` — run from its folder via npm. Default browser channel is installed Chrome (`channel: 'chrome'`); machines without a system Chrome build can point at a Playwright chromium via `GAME_WEB_CHROME` (see `playwright.config.ts`). Config and host setup: see `docs/testing-ui-E2E/index.md`. `home.spec.ts` asserts the Babylon demo-balls scene (canvas + WebGL2 + drawn pixels).
 - `src/Game.Wasm` is the browser-wasm host (non-Blazor, `Microsoft.NET.Sdk.WebAssembly`). Implements the `[JSImport]`/`[JSExport]` interop bridge with pinned shared memory buffer (`PinnedRenderBuffer<T>`) via `WasmInterop`, and the Babylon provider (wasm-interop.js module). Bootstraps via direct `import { dotnet } from './_framework/dotnet.js'` (no `blazor.webassembly.js`). No game sims are hosted (the game examples were removed); the bridge stays for future simulations.
 - `src/Game.WinApp` is the Windows desktop host: WinUI 3 (Windows App SDK) + WebView2 + **Native AOT** (`PublishAot`, unpackaged/self-contained in Release). It references `Game.Engine` and runs the same ECS/Bepu simulation in-process, then publishes committed buffers to the page through WebView2 **shared buffers** (`SharedBufferChannel`: `CreateSharedBuffer` + `PostSharedBufferToScript`). The page shell is `wwwroot/index.html` + `wwwroot/js/webview-bridge.js`; the Babylon bundle itself is host-agnostic. Publish: `dotnet publish src/Game.WinApp/Game.WinApp.csproj -c Release -r win-x64 -p:Platform=x64`. See `docs/architecture/desktop-webview2.md`.
-- `src/Game.Engine.ECS.SimulationHost` is the host-agnostic simulation control (lazily creates `EcsSimulation`/`Transform3DEcsSimulation`, owns the pinned buffers, exposes `Connect`/`SetPaused` and a `BufferNotify(eventName, nint ptr, elementCount, scalarSize)` callback). Both hosts construct it with their own delivery mechanism — the browser host forwards to `notifyRender` (heap view; pointer narrowed to `int` for the 32-bit WASM heap), WinApp to the shared-buffer channel. Keep the pointer host-width (`nint`): truncating it to `int` crashes the native x64 AOT process.
+- `src/Game.Engine.ECS.SimulationHost` is the host-agnostic simulation control (lazily creates `EcsSimulation`/`Transform3DEcsSimulation`, owns the pinned float64 buffers, exposes `Connect`/`SetPaused` and a `BufferNotify(eventName, nint ptr, elementCount)` callback). Both hosts construct it with their own delivery mechanism — the browser host forwards to `notifyRender` (heap view; pointer narrowed to `int` for the 32-bit WASM heap), WinApp to the shared-buffer channel. Keep the pointer host-width (`nint`): truncating it to `int` crashes the native x64 AOT process.
 
 - `src/bepuphysics2` is a **vendored** C# physics library (BepuPhysics2, Apache-2.0), **referenced** by `Game.Engine.csproj` as the authoritative physics world: `BepuPhysics` + `BepuUtilities` (net10.0, `CommonSettings.props`). Deterministic single-threaded solves (null `ThreadDispatcher`). `src/BrainAI` (pathfinding/AI) remains vendored but **unreferenced** — treat as a target dependency, not active. `src/Temp/` holds upstream samples/demos — not part of the build/solution.
 - The Babylon.js v9 ecosystem (`@babylonjs/core`) is declared in `src/Game.UI/package.json`.
@@ -179,7 +179,7 @@ Summary of the scope an agent can search using this server:
 | Guardrail Category | Status | Architectural Impact of the New Interop Layer |
 | --- | --- | --- |
 | **C# Authority & ECS / BepuPhysics2** | **Valid** | C# remains the sole authoritative simulation engine using Arch ECS and `BepuPhysics2`. Game logic and physics simulation are never executed in JavaScript. |
-| **Transport Layer (`fetch` POST / SSE Streams)** | **Superseded** | The legacy SSE stream (`/api/ecs/stream` pushing JSON `SpriteState[]`) and HTTP POST render bridges are deprecated for rendering. They are replaced by direct, zero-copy `Float32Array`/`Float64Array` views over the WASM memory heap (browser) and WebView2 shared buffers (desktop). |
+| **Transport Layer (`fetch` POST / SSE Streams)** | **Superseded** | The legacy SSE stream (`/api/ecs/stream` pushing JSON `SpriteState[]`) and HTTP POST render bridges are deprecated for rendering. They are replaced by direct, zero-copy `Float64Array` views over the WASM memory heap (browser) and WebView2 shared buffers (desktop). |
 | **Single-Player Local Default** | **Valid** | Local-buffer builds remain the default (`SINGLE_PLAYER_LOCAL`), avoiding unnecessary network abstraction layers during single-player execution. |
 | **Temporal Context & Snapshots** | **Upgraded** | Instead of serializing temporal JSON snapshots over network bridges, hot-path coordinate, rotation, and scale data stream continuously via pinned unmanaged memory pointers (`GCHandle.Alloc` + WebAssembly heap mapping). |
 | **Presentation Split (Babylon.js v9)** | **Valid** | Babylon.js v9 remains strictly responsible for rendering, mesh pools, camera control, and interpolation, reading directly from the shared memory buffer without per-entity interop polling. |

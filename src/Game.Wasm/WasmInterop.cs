@@ -31,13 +31,13 @@ public static partial class WasmInterop
         _simHost.SetPaused(paused);
     }
 
-    /// <summary>Forwarded to JS after every committed buffer (scalarSize: 4 = float32, 8 = float64).</summary>
-    private static void Notify(string eventName, nint bufferPtr, int elementCount, int scalarSize)
+    /// <summary>Forwarded to JS after every committed buffer (scalar elements are always float64).</summary>
+    private static void Notify(string eventName, nint bufferPtr, int elementCount)
     {
         // The WASM heap is a 32-bit linear memory, so the pointer fits the JSImport int contract.
-        NotifyRender(eventName, (int)bufferPtr, elementCount, scalarSize);
+        NotifyRender(eventName, (int)bufferPtr, elementCount);
     }
 
     [JSImport("notifyRender", "WasmInterop")]
-    internal static partial void NotifyRender(string eventName, int bufferPtr, int elementCount, int scalarSize);
+    internal static partial void NotifyRender(string eventName, int bufferPtr, int elementCount);
 }

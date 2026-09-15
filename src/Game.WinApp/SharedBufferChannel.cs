@@ -10,8 +10,9 @@ namespace Game_WinApp;
 ///     as an <c>ArrayBuffer</c> — no JSON payload, no per-frame serialization and no
 ///     per-entity interop calls.
 ///
-///     The scalar type is declared by the C# <c>[TypeScriptExport]</c> struct and echoed in
-///     the per-post metadata (<c>scalarSize</c>: 4 = Float32Array, 8 = Float64Array).
+///     The scalar element type is always 8-byte double (Float64Array) — the ABI has no
+///     scalar-size field. Metadata carries <c>channel</c>, <c>seq</c> and <c>elementCount</c>
+///     only.
 ///
 ///     Frames rotate over three buffers: the page may still be reading frame N while the
 ///     simulation writes frame N+1, and each script-side view is released immediately after
@@ -22,9 +23,11 @@ internal sealed class SharedBufferChannel : IDisposable
 {
     private const int BufferCount = 3;
 
+    /// <summary>Bytes per scalar element — every signal is pure 64-bit.</summary>
+    private const int ScalarSize = sizeof(double);
+
     private readonly CoreWebView2 _core;
     private readonly string _channel;
-    private readonly int _scalarSize;
 
     private readonly CoreWebView2SharedBuffer[] _buffers = new CoreWebView2SharedBuffer[BufferCount];
     private readonly Stream[] _streams = new Stream[BufferCount];
@@ -34,18 +37,17 @@ internal sealed class SharedBufferChannel : IDisposable
     private int _next;
     private long _seq;
 
-    public SharedBufferChannel(CoreWebView2 core, string channel, int scalarSize, int capacityElements)
+    public SharedBufferChannel(CoreWebView2 core, string channel, int capacityElements)
     {
         _core = core;
         _channel = channel;
-        _scalarSize = scalarSize;
         Allocate(capacityElements);
     }
 
     private void Allocate(int capacityElements)
     {
         _capacityElements = capacityElements;
-        var byteSize = (ulong)((long)capacityElements * _scalarSize);
+        var byteSize = (ulong)((long)capacityElements * ScalarSize);
         for (var i = 0; i < BufferCount; i++)
         {
             _buffers[i] = _core.Environment.CreateSharedBuffer(byteSize);
@@ -62,9 +64,9 @@ internal sealed class SharedBufferChannel : IDisposable
     /// </summary>
     public void Post(nint pointer, int elementCount)
     {
-        var byteCount = elementCount * _scalarSize;
+        var byteCount = elementCount * ScalarSize;
 
-        if (byteCount > _capacityElements * _scalarSize)
+        if (byteCount > _capacityElements * ScalarSize)
         {
             Free();
             Allocate(elementCount);
@@ -88,7 +90,7 @@ internal sealed class SharedBufferChannel : IDisposable
 
         _seq++;
         var metadata =
-            $"{{\"channel\":\"{_channel}\",\"seq\":{_seq},\"elementCount\":{elementCount},\"scalarSize\":{_scalarSize}}}";
+            $"{{\"channel\":\"{_channel}\",\"seq\":{_seq},\"elementCount\":{elementCount}}}";
         _core.PostSharedBufferToScript(_buffers[index], CoreWebView2SharedBufferAccess.ReadOnly, metadata);
     }
 

@@ -9,8 +9,8 @@ namespace Game.Engine.ECS;
 ///     Every signal buffer starts with a six-element standard header:
 ///         [0] seq, [1] epoch, [2] entityCount, [3] stride, [4] stepMs, [5] tickMs
 ///     followed by scene-specific scalar extras, then entityCount × stride entity records.
-///     The scalar element type is per signal (see <c>SignalBufferLayout</c>): ecs/sprite-move
-///     uses 4-byte floats, transform3d uses 8-byte doubles.
+///     Scalar elements are always 8-byte doubles (<c>Float64Array</c> on every host) — the
+///     ABI carries no scalar-size field.
 ///     Booleans are encoded as 0 / 1.
 /// </summary>
 public static class SignalBuffer
@@ -22,17 +22,6 @@ public static class SignalBuffer
     public const int HeaderStride = 3;
     public const int HeaderStepMs = 4;
     public const int HeaderTickMs = 5;
-
-    public static void WriteHeader(
-        Span<float> f, long seq, long epoch, int entityCount, int stride, double stepMs, double tickMs)
-    {
-        f[HeaderSeq] = seq;
-        f[HeaderEpoch] = epoch;
-        f[HeaderEntityCount] = entityCount;
-        f[HeaderStride] = stride;
-        f[HeaderStepMs] = (float)stepMs;
-        f[HeaderTickMs] = (float)tickMs;
-    }
 
     public static void WriteHeader(
         Span<double> f, long seq, long epoch, int entityCount, int stride, double stepMs, double tickMs)
@@ -53,9 +42,9 @@ public static class SignalBuffer
 /// </summary>
 public static class SignalBufferLayout
 {
-    // ecs (sprite-move): no extras, SpriteState record (id, x, y, r, g, b) — float32.
+    // ecs (sprite-move): no extras, SpriteState record (id, x, y, r, g, b) — float64.
     public const int EcsStride = 6;
-    public const int EcsScalarSize = 4;
+    public const int EcsScalarSize = 8;
     public const int EcsByteLength = EcsStride * EcsScalarSize;
 
     // transform3d: no extras, Transform3DState record (id, xyz, quat xyzw, scale xyz) — float64.
@@ -72,12 +61,12 @@ public static class SignalBufferLayout
 /// </summary>
 public static class SignalBufferEncoders
 {
-    // ---- ECS (sprite-move): float32 buffer ---------------------------------
+    // ---- ECS (sprite-move): float64 buffer ---------------------------------
 
     public static int ElementLength(EcsRenderSignal s) =>
         SignalBuffer.HeaderLength + s.Sprites.Count * SignalBufferLayout.EcsStride;
 
-    public static void Encode(EcsRenderSignal s, Span<float> f)
+    public static void Encode(EcsRenderSignal s, Span<double> f)
     {
         // EcsRenderSignal carries no StepMs/Epoch; the client's interpolation
         // header still expects them, so encode the fixed 60 Hz step and epoch 0.
@@ -135,5 +124,5 @@ public static class SignalBufferEncoders
 
     private delegate void WriteEntity<in TEntity, TElement>(TEntity entity, Span<TElement> destination);
 
-    private static float Bool(bool value) => value ? 1f : 0f;
+    private static double Bool(bool value) => value ? 1d : 0d;
 }

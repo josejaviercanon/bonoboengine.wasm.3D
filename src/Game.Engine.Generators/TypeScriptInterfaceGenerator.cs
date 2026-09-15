@@ -63,7 +63,7 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
             return null;
 
         var declaredStride = 0;
-        var scalarSize = InteropNames.Float32Size;
+        var scalarSize = InteropNames.Float64Size;
         var hasAttribute = false;
         foreach (var ad in symbol.GetAttributes())
         {
@@ -172,8 +172,8 @@ public sealed class TypeScriptInterfaceGenerator : IIncrementalGenerator
         sb.AppendLine("// Single source of truth: the C# [TypeScriptExport] structs and Game.Engine.ECS.SignalBufferLayout.");
         sb.AppendLine("// Regenerated on every `dotnet build` of Game.Engine.");
         sb.AppendLine();
-        sb.AppendLine("/** Scalar element type of the shared-memory signal buffer. */");
-        sb.AppendLine("export type ScalarArray = Float32Array | Float64Array;");
+        sb.AppendLine("/** Scalar element type of the shared-memory signal buffer (pure 64-bit). */");
+        sb.AppendLine("export type ScalarArray = Float64Array;");
         sb.AppendLine();
         sb.AppendLine("/** Scalar element sizes in bytes; keep in sync with ScalarPrecision. */");
         sb.AppendLine("export const ScalarSizes = { Float32: 4, Float64: 8 } as const;");

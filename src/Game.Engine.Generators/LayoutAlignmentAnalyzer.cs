@@ -53,7 +53,7 @@ public sealed class LayoutAlignmentAnalyzer : DiagnosticAnalyzer
         if (symbol.TypeKind != TypeKind.Struct) return;
 
         var declaredStride = 0;
-        var scalarSize = InteropNames.Float32Size;
+        var scalarSize = InteropNames.Float64Size;
         var hasAttribute = false;
         foreach (var ad in symbol.GetAttributes())
         {

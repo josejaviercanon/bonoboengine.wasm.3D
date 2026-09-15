@@ -28,9 +28,8 @@ export interface SignalStream {
     /** Subscribe to one named signal (SSE event name today); `data` is raw JSON. */
     addSignalListener(eventName: string, onData: (data: string) => void): void;
     /**
-     * Subscribe to one named signal as a raw scalar buffer (Float32Array or
-     * Float64Array — the element type is declared by the C# [TypeScriptExport]
-     * struct and kept in `generated/signalLayout.ts`).
+     * Subscribe to one named signal as a raw scalar buffer (Float64Array — every
+     * signal is pure 64-bit; the layout is pinned in `generated/signalLayout.ts`).
      * Only ever fires in `local-buffer` builds — the SSE-branch stub is a no-op.
      */
     addBufferListener(eventName: string, onData: (values: ScalarArray) => void): void;
@@ -47,7 +46,7 @@ export interface SignalStream {
 
 /**
  * The co-located host registers a typed-array bridge here: every signal is delivered as
- * the Float32Array/Float64Array view over the pinned buffer written by
+ * a Float64Array view over the pinned buffer written by
  * `DirectRenderTransport` (WASM heap) or a WebView2 shared buffer (desktop), and every
  * command is a direct in-process call into the sim's public API (`QueueInput`, `Start`,
  * `Reset`, …) keyed by the same `path` the SSE branch would POST to.

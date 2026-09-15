@@ -38,13 +38,13 @@ Rule: never move simulation back-and-forth through JS interop every frame. The s
 
 **Problem:** per-entity interop at 60 FPS saturates the boundary; simulation (60 Hz) and display (144 Hz) differ in time domain -> jitter.
 
-**Implemented (browser host):** zero-copy shared-memory pipeline. The simulation writes each batched render signal into a pinned `float[]`/`double[]` (`GCHandle.Alloc(..., Pinned)`), passes the raw pointer to JS via `[JSImport]("notifyRender")` with the element count and scalar size, and JS reads `new Float32Array/Float64Array(heap.buffer, ptr, count)` over the WASM heap (`localHeapViewF32()`/`localHeapViewF64()`) — no JSON, no byte[] copy, no `IJSRuntime`. Client interpolates: `P_render = P_prev + (P_curr - P_prev) * alpha`, `alpha = (T_now - T_last_tick) / T_tick`.
+**Implemented (browser host):** zero-copy shared-memory pipeline. The simulation writes each batched render signal into a pinned `double[]` (`GCHandle.Alloc(..., Pinned)`), passes the raw pointer to JS via `[JSImport]("notifyRender")` with the element count, and JS reads `new Float64Array(heap.buffer, ptr, count)` over the WASM heap (`localHeapViewF64()`) — no JSON, no byte[] copy, no `IJSRuntime`. Client interpolates: `P_render = P_prev + (P_curr - P_prev) * alpha`, `alpha = (T_now - T_last_tick) / T_tick`.
 
-**Implemented (desktop host):** the same pinned buffer is copied into a `CoreWebView2SharedBuffer` and posted with `PostSharedBufferToScript(..., ReadOnly, {channel, seq, elementCount, scalarSize})`; the page receives `sharedbufferreceived`, wraps the mapping in a `Float64Array`, dispatches synchronously and releases it (`chrome.webview.releaseBuffer`). Details: `docs/architecture/desktop-webview2.md`.
+**Implemented (desktop host):** the same pinned buffer is copied into a `CoreWebView2SharedBuffer` and posted with `PostSharedBufferToScript(..., ReadOnly, {channel, seq, elementCount})`; the page receives `sharedbufferreceived`, wraps the mapping in a `Float64Array`, dispatches synchronously and releases it (`chrome.webview.releaseBuffer`). Details: `docs/architecture/desktop-webview2.md`.
 
 **Deprecated:** `GET /api/ecs/stream` SSE pushing `event: sprite-move` with batched `SpriteState[]` JSON — the legacy transport, superseded by the pinned-buffer path (retained only in the opt-in multiplayer `--mode web` / `npm run build:web` build).
 
-The canonical layout lives in `Game.Engine.ECS.SignalBuffer.cs` (`SignalBuffer` + `SignalBufferLayout` + `SignalBufferEncoders`): a six-element header (`seq, epoch, entityCount, stride, stepMs, tickMs`) + entity records, with a per-signal scalar type — `sprite-move` is float32 (`SpriteState`, stride 6), `transform3d` is float64 (`Transform3DState`, stride 11: id + position + quaternion + scale). The C# and TS halves are kept in lockstep by `src/Game.Engine.Generators` — see "Zero-Copy Layout Guardrails" below.
+The canonical layout lives in `Game.Engine.ECS.SignalBuffer.cs` (`SignalBuffer` + `SignalBufferLayout` + `SignalBufferEncoders`): a six-element header (`seq, epoch, entityCount, stride, stepMs, tickMs`) + entity records, with pure 64-bit scalar elements — `sprite-move` is float64 (`SpriteState`, stride 6), `transform3d` is float64 (`Transform3DState`, stride 11: id + position + quaternion + scale). The C# and TS halves are kept in lockstep by `src/Game.Engine.Generators` — see "Zero-Copy Layout Guardrails" below.
 
 ## Zero-Copy Layout Guardrails
 
@@ -56,7 +56,7 @@ The C# layout and the TypeScript decoders must never drift. `src/Game.Engine.Gen
 | Boot-time static assert | Load-time (WASM boot + WinApp startup) | `TypeScriptInterfaceGenerator` emits `GeneratedSignalLayout` (`*Stride`, `*ScalarSize`, `*ByteLength`) + a `[ModuleInitializer]` that asserts each computed value equals the matching `SignalBufferLayout` constant. |
 | TypeScript half | Build-time | The same generator writes `src/Game.UI/Frontend/scenes/generated/signalLayout.ts` (`ScalarArray`, `ScalarSizes`, interfaces + stride/scalar constants). |
 
-Every render-state record struct carries the marker with its precision (`SpriteState` → `[TypeScriptExport(6, Precision = ScalarPrecision.Float32)]`; `Transform3DState` → `[TypeScriptExport(11, Precision = ScalarPrecision.Float64)]`).
+Every render-state record struct carries the marker with its precision (`SpriteState` → `[TypeScriptExport(6)]`; `Transform3DState` → `[TypeScriptExport(11)]`) — `Precision` defaults to `ScalarPrecision.Float64`, so all production signals are pure 64-bit.
 
 ## Physics Architecture
 
@@ -128,9 +128,9 @@ The Babylon.js v9 stack is declared in `src/Game.UI/package.json`: `@babylonjs/c
 | 3D transform layout (position + quaternion + scale, `Transform3DState`) | Implemented — float64 (`Float64Array`), stride 11, validated by `Game.Engine.Generators` |
 | Render transport seam: `IRenderTransport<TSignal>` injected into all sims, `ServerRenderTransport` default, `SINGLE_PLAYER_LOCAL` build switches in `Game.Engine.csproj` | Implemented |
 | Single-player-local default: `SINGLE_PLAYER_LOCAL` + `local-buffer` are the default builds; `fetch` POST exists only in the `--mode web` / `npm run build:web` multiplayer branch | Implemented |
-| `Game.Wasm` co-located host: `PinnedRenderBuffer<T>` + `DirectRenderTransport<TSignal, T>` (zero-copy: pinned `GCHandle` → `[JSImport] notifyRender(ptr, count, scalarSize)` → JS reads `Float32Array`/`Float64Array` over the WASM heap), typed `[JSExport]` commands, `wasm-interop.js` provider. | Implemented |
+| `Game.Wasm` co-located host: `PinnedRenderBuffer<T>` + `DirectRenderTransport<TSignal, T>` (zero-copy: pinned `GCHandle` → `[JSImport] notifyRender(ptr, count)` → JS reads `Float64Array` over the WASM heap), typed `[JSExport]` commands, `wasm-interop.js` provider. | Implemented |
 | `Game.WinApp` desktop host (WinUI 3 + WebView2 + Native AOT): same `SimulationHost`, `SharedBufferChannel` (`CreateSharedBuffer` + `PostSharedBufferToScript`) → page `Float64Array` view, `webview-bridge.js` provider, unpackaged self-contained Release publish | Implemented |
-| Host-agnostic `Game.Engine.ECS.SimulationHost` — lazy `EcsSimulation`/`Transform3DEcsSimulation`, pinned buffers, `BufferNotify(eventName, ptr, elementCount, scalarSize)` | Implemented |
+| Host-agnostic `Game.Engine.ECS.SimulationHost` — lazy `EcsSimulation`/`Transform3DEcsSimulation`, pinned float64 buffers, `BufferNotify(eventName, ptr, elementCount)` | Implemented |
 | `Game.Wasm` Release AOT publish — `RunAOTCompilation` + `WasmStripIL`, vendored Arch generic templates capped at arity 15 (`Helpers.ttinclude` `Amount=16`); `[JSImport]/[JSExport]` source-gen interop (AOT-safe, no reflection) | Implemented |
 | `Game.WinApp` Release AOT publish (`PublishAot`, `WindowsPackageType=None`, self-contained; `PublishReadyToRun` disabled under AOT) | Implemented |
 | Interop hygiene — `WasmInterop.Initialize` in `Program.cs`, `babylon-bundle-ready` event handshake, no `DotNetObjectReference`/`CommandJsonContext` | Implemented |

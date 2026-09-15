@@ -22,7 +22,8 @@ internal static class InteropNames
     ///     shared-memory buffer; 0 means "compute from fields, do not assert" (the module
     ///     initializer still cross-checks the computed stride against <c>SignalBufferLayout</c>).
     ///     <c>Precision</c> selects the scalar element type of the buffer that carries the
-    ///     struct: Float32 (default, 4-byte elements) or Float64 (8-byte elements).
+    ///     struct: Float64 (default, 8-byte elements) or Float32 (4-byte elements). All
+    ///     production signals are pure 64-bit — the ABI has no scalar-size branch anymore.
     ///     The attribute type name is kept for backwards compatibility with existing
     ///     <c>[TypeScriptExport(n)]</c> usages.
     /// </summary>
@@ -48,8 +49,8 @@ internal static class InteropNames
         "\n" +
         "        public int FloatStride { get; }\n" +
         "\n" +
-        "        /// <summary>Scalar element type used for this struct (default Float32).</summary>\n" +
-        "        public ScalarPrecision Precision { get; set; } = ScalarPrecision.Float32;\n" +
+        "        /// <summary>Scalar element type used for this struct (default Float64).</summary>\n" +
+        "        public ScalarPrecision Precision { get; set; } = ScalarPrecision.Float64;\n" +
         "\n" +
         "        /// <summary>Scalar element size in bytes (4 or 8).</summary>\n" +
         "        public int ScalarSize => (int)Precision;\n" +

@@ -4,8 +4,8 @@
 // buffers through WebView2 shared memory:
 //
 //   host -> script   `sharedbufferreceived`
-//                    additionalData = { channel, seq, elementCount, scalarSize }
-//                    getBuffer()    = ArrayBuffer over the shared mapping
+//                    additionalData = { channel, seq, elementCount }
+//                    getBuffer()    = ArrayBuffer over the shared mapping (Float64Array)
 //   script -> host   chrome.webview.postMessage("connect:{game}" | "pause:1|0")
 //
 // The page never polls: signals are pushed, and every script-side view is released
@@ -67,8 +67,8 @@ if (!webview) {
     webview.addEventListener('sharedbufferreceived', (event) => {
         const metadata = event.additionalData ?? {};
         const buffer = event.getBuffer();
-        // scalarSize is declared by the C# [TypeScriptExport] struct: 4 = float32, 8 = float64.
-        const values = metadata.scalarSize === 4 ? new Float32Array(buffer) : new Float64Array(buffer);
+        // Every signal buffer is pure 64-bit doubles — one typed-array path, no width branch.
+        const values = new Float64Array(buffer);
         try {
             dispatch(metadata.channel, values);
         } finally {

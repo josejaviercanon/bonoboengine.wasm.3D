@@ -1,16 +1,13 @@
 let _provider = null;
 let _exports = null;
 
-export function notifyRender(eventName, bufferPtr, elementCount, scalarSize) {
+export function notifyRender(eventName, bufferPtr, elementCount) {
     const runtime = globalThis.getDotnetRuntime(0);
     if (!runtime) return;
-    // The scalar type is declared by the C# [TypeScriptExport] struct: float32 buffers
-    // (ecs/sprite-move) view HEAPF32, float64 buffers (transform3d) view HEAPF64.
-    // Both are zero-copy typed-array views over the same WASM linear memory.
-    const heap = scalarSize === 8 ? runtime.localHeapViewF64() : runtime.localHeapViewF32();
-    const values = scalarSize === 8
-        ? new Float64Array(heap.buffer, bufferPtr, elementCount)
-        : new Float32Array(heap.buffer, bufferPtr, elementCount);
+    // Every signal buffer is pure 64-bit: one zero-copy Float64Array view over the
+    // WASM linear memory (HEAPF64). No scalar-size branch — the ABI carries no width.
+    const heap = runtime.localHeapViewF64();
+    const values = new Float64Array(heap.buffer, bufferPtr, elementCount);
     dispatchFloats(eventName, values);
 }
 

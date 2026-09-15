@@ -6,8 +6,8 @@
 
       * LayoutAlignmentAnalyzer (BNOBO001/BNOBO002) — compile-time (IDE red
         squiggle) validation that every [TypeScriptExport] struct can be encoded
-        into the shared-memory float32 buffer and that its declared stride matches
-        the computed float width of its fields.
+        into the shared-memory float64 buffer and that its declared stride matches
+        the computed element width of its fields.
 
       * TypeScriptInterfaceGenerator — emits (a) `GeneratedSignalLayout` + a
         `[ModuleInitializer]` fail-fast that asserts generated strides equal

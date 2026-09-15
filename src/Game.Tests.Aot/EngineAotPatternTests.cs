@@ -87,12 +87,12 @@ public class EngineAotPatternTests
     [Test]
     public async Task Signal_Layout_Scalar_Sizes_Are_Locked()
     {
-        // The interop contract is scalar-typed per struct: transform3d crosses the
-        // boundary as Float64Array (double), ecs/sprite-move stays Float32Array (float).
+        // The interop contract is pure 64-bit: every signal buffer crosses the
+        // boundary as Float64Array (double) — there is no per-signal scalar size.
         // These constants are generated from the [TypeScriptExport] attributes and
         // cross-checked at boot against SignalBufferLayout.
         await Assert.That(GeneratedSignalLayout.Transform3DStateScalarSize).IsEqualTo(sizeof(double));
-        await Assert.That(GeneratedSignalLayout.SpriteStateScalarSize).IsEqualTo(sizeof(float));
+        await Assert.That(GeneratedSignalLayout.SpriteStateScalarSize).IsEqualTo(sizeof(double));
         await Assert.That(GeneratedSignalLayout.Transform3DStateStride).IsEqualTo(SignalBufferLayout.Transform3DStride);
         await Assert.That(GeneratedSignalLayout.SpriteStateStride).IsEqualTo(SignalBufferLayout.EcsStride);
     }

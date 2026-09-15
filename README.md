@@ -30,7 +30,7 @@ To make this architecture work without destroying performance, you must isolate 
 |        2. PRESENTATION BRIDGE        |   |       3. FUTURE SERVER HOSTER        |
 |  - Non-Blazor browser-wasm host      |   |  - ASP.NET Core Minimal API / WebSockets
 |  - [JSImport]/[JSExport] + shared    |   |  - Runs the exact same Core Engine   |
-|    memory (Float32/64 over WASM)     |   |  - Verifies incoming client commands |
+|    memory (Float64 over WASM)        |   |  - Verifies incoming client commands |
 |  - WinUI 3 + WebView2 desktop host   |   |                                      |
 |    (native AOT, shared buffers)      |   |                                      |
 +--------------------------------------+   +--------------------------------------+
@@ -42,11 +42,11 @@ To make this architecture work without destroying performance, you must isolate 
    - *Physics:* `BepuPhysics2` (vendored at `src/bepuphysics2`). The asteroids sim runs a 2D-plane court inside the 3D solver (z-locked pose integrator), with contact filtering via a `CollidableProperty<int>` category matrix and begin-touch accumulation in `INarrowPhaseCallbacks`. Never pass a `ThreadDispatcher` to `Simulation.Timestep` on the browser host.
 2. **The Presentation Layer (Babylon.js v9 + Tailwind)** — a pure mirror of your C# state.
    - *Tailwind UI:* DOM overlays (menus, HUDs, inventory grids) on top of the canvas.
-   - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float32Array`/`Float64Array` over the WASM heap in the browser, `Float64Array` over a WebView2 shared buffer on desktop) and updates meshes/cameras per render frame — no per-entity interop calls.
+   - *Babylon.js Canvas:* reads transform state from the pinned shared-memory buffer (`Float64Array` over the WASM heap in the browser and over a WebView2 shared buffer on desktop) and updates meshes/cameras per render frame — no per-entity interop calls.
 
 ### ⚠️ The Performance Gold Rule: Avoid JSON Serialization
 
-Polling C# from JavaScript every frame, or serializing the whole state tree per frame, will reduce your game's frame rate down to single digits. Use the **Push-Based Batched Signal** approach: the engine emits one batched render signal per fixed tick into a pinned `GCHandle` buffer; JS reads it through a typed-array view (browser: `[JSImport] notifyRender` → `Float32Array`/`Float64Array` over `HEAPF32`/`HEAPF64`; desktop: `sharedbufferreceived` from `PostSharedBufferToScript`). Zero copies, no JSON, no reflection.
+Polling C# from JavaScript every frame, or serializing the whole state tree per frame, will reduce your game's frame rate down to single digits. Use the **Push-Based Batched Signal** approach: the engine emits one batched render signal per fixed tick into a pinned `GCHandle` buffer; JS reads it through a typed-array view (browser: `[JSImport] notifyRender` → `Float64Array` over `HEAPF64`; desktop: `sharedbufferreceived` from `PostSharedBufferToScript`). Zero copies, no JSON, no reflection.
 
 ## 🧬 Engine Topology: Simulation ↔ Presentation ↔ Render
 
@@ -58,7 +58,7 @@ BABYLON.JS v9                   meshes, thin instances, camera, particles, GPU
 ```
 
 - **Never** move simulation back-and-forth through JS interop every frame. Cross the boundary only via batched render snapshots.
-- **Bridge status:** zero-copy shared memory pipeline implemented on both hosts: C# writes signal snapshots into a pinned `GCHandle` buffer (`PinnedRenderBuffer<T>`) → the browser host reads `Float32Array`/`Float64Array` over the WASM heap via `[JSImport] notifyRender`; the desktop host copies the same span into a `CoreWebView2SharedBuffer` (`PostSharedBufferToScript`) and the page wraps it as a `Float64Array` (`docs/architecture/desktop-webview2.md`). Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`.
+- **Bridge status:** zero-copy shared memory pipeline implemented on both hosts: C# writes signal snapshots into a pinned `GCHandle` buffer (`PinnedRenderBuffer<T>`) → the browser host reads the `Float64Array` over the WASM heap via `[JSImport] notifyRender`; the desktop host copies the same span into a `CoreWebView2SharedBuffer` (`PostSharedBufferToScript`) and the page wraps it as a `Float64Array` (`docs/architecture/desktop-webview2.md`). Client interpolation: `P_render = P_prev + (P_curr − P_prev) × α`.
 - **Domain ownership:** C# owns game rules, collision, character controllers, deterministic simulation. Babylon.js owns mesh transforms, camera control, interpolation, particles.
 - **Physics:** BepuPhysics2 = authoritative 3D rigid-body simulation (C# ECS loop, vendored at `src/bepuphysics2`).
 
@@ -84,7 +84,7 @@ Full matrices (ecosystem integration, implementation status, packages) live in `
 - **Physics (BepuPhysics2):** deterministic 3D rigid-body simulation, single-threaded solves on the browser-wasm host (vendored at `src/bepuphysics2`).
 - **Canvas & Presentation Layer (Babylon.js v9):** 3D WebGL2/WebGPU hardware-accelerated rendering with mesh pooling, thin instances, and glTF support (`@babylonjs/core`).
 - **UI Layout & Theme Canvas (Tailwind CSS):** responsive HUDs, menus, popups, and inventory windows using standard HTML/CSS.
-- **Shared-Memory Bridge:** pinned `GCHandle` + `Float32Array`/`Float64Array` over the WASM heap (browser) or WebView2 shared buffers (desktop); the C#↔TS layout (element strides + scalar sizes) is kept in lockstep by `Game.Engine.Generators` (analyzer + source generator + boot-time assert).
+  - **Shared-Memory Bridge:** pinned `GCHandle` + `Float64Array` over the WASM heap (browser) or WebView2 shared buffers (desktop); the C#↔TS layout (element strides + scalar sizes) is kept in lockstep by `Game.Engine.Generators` (analyzer + source generator + boot-time assert).
 
 ## Repository Layout
 
@@ -149,7 +149,7 @@ physics arena, amiga-textured spheres, free camera) renders fullscreen. No game
 examples or launch menu remain; the WASM host boots the interop bridge for future
 simulations.
 
-Render signals travel as scalar-typed buffers: `DirectRenderTransport<TSignal, T>` encodes each batched signal into the canonical layout (`SignalBuffer.cs` — 4-byte elements for `sprite-move`, 8-byte elements for `transform3d`), writes it into a pinned `GCHandle` array, and notifies JS via `[JSImport]("notifyRender")` — JS views it as a `Float32Array`/`Float64Array` over the WASM heap.
+Render signals travel as pure 64-bit buffers: `DirectRenderTransport<TSignal, T>` encodes each batched signal into the canonical layout (`SignalBuffer.cs` — 8-byte doubles for `sprite-move` and `transform3d` alike), writes it into a pinned `GCHandle` array, and notifies JS via `[JSImport]("notifyRender")` — JS views it as a `Float64Array` over the WASM heap.
 
 For best raw sim throughput, publish with AOT (needs
 `dotnet workload install wasm-tools`; dev runs stay interpreted):

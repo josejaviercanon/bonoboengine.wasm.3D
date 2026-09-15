@@ -11,7 +11,7 @@ C# (native AOT, Game.WinApp process)                 WebView2 renderer process
   Transform3DEcsSimulation (60 Hz timer)
     └─ DirectRenderTransport<TSignal, double>
          └─ PinnedRenderBuffer<double>  (GCHandle pinned)
-              └─ SimulationHost.BufferNotify(event, nint ptr, count, scalarSize=8)
+              └─ SimulationHost.BufferNotify(event, nint ptr, count)
                    └─ SharedBufferChannel.Post(ptr, count)      ← UI thread
                         ├─ copy into rotating CoreWebView2SharedBuffer
                         └─ PostSharedBufferToScript(ReadOnly, {channel,seq,...})
@@ -37,7 +37,7 @@ host-width and cast to `int` only where the JSImport contract requires it (`Wasm
 
 ## Architecture rules it satisfies
 
-- **Zero-copy / no JSON on the hot path.** The bulk payload is shared memory (`CoreWebView2Environment.CreateSharedBuffer`); only a tiny metadata string (`channel`, `seq`, `elementCount`, `scalarSize`) rides with each post. No per-entity interop, no serialized transforms.
+- **Zero-copy / no JSON on the hot path.** The bulk payload is shared memory (`CoreWebView2Environment.CreateSharedBuffer`); only a tiny metadata string (`channel`, `seq`, `elementCount`) rides with each post. No per-entity interop, no serialized transforms.
 - **Authoritative C#.** The page never simulates; it only consumes buffers and sends low-frequency commands.
 - **Fixed-step decoupling.** The simulation ticks on a `System.Threading.Timer` (60 Hz); the WebView2 post happens on the UI thread via a coalescing dispatcher hop, and Babylon renders on `requestAnimationFrame`.
 
@@ -49,13 +49,13 @@ That API does not exist in the WebView2 surface. Verified against `Microsoft.Web
 
 | Direction | Mechanism | Payload |
 | --- | --- | --- |
-| host → page | `CoreWebView2.PostSharedBufferToScript(buffer, ReadOnly, additionalDataAsJson)` | `{ "channel": "transform3d", "seq": N, "elementCount": E, "scalarSize": 8 }` |
+| host → page | `CoreWebView2.PostSharedBufferToScript(buffer, ReadOnly, additionalDataAsJson)` | `{ "channel": "transform3d", "seq": N, "elementCount": E }` |
 | page → host | `chrome.webview.postMessage("connect:transform3d" \| "pause:1" \| "pause:0")` | primitive verb string (`CoreWebView2.WebMessageReceived` → `TryGetWebMessageAsString()`) |
 
 Page-side contract (`wwwroot/js/webview-bridge.js`):
 
 - Buffers are **only valid inside the listener callback**. The bridge releases the view immediately after the synchronous dispatch, so decoders must copy out what they keep (`decodeTransform3D` builds a plain snapshot).
-- `scalarSize` selects the typed array: `4` → `Float32Array`, otherwise `Float64Array` (the C# `[TypeScriptExport]` precision is the source of truth).
+- Every signal buffer is pure 64-bit: the bridge always wraps the mapping in a `Float64Array` — there is no scalar-size branch (the shared-memory ABI carries no width).
 - The provider implements the same `LocalBufferProvider` interface as the WASM host, so the Babylon bundle is host-agnostic.
 
 Host-side rules (`SharedBufferChannel`):

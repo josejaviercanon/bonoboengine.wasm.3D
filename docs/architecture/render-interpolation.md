@@ -1,6 +1,6 @@
 # Render Interpolation — Implementation Guide
 
-> Reviewed blueprint for the authoritative-sim ← boundary → presentation interpolation math (C# ECS sim ← shared-memory bridge → TypeScript Babylon.js). The original dual-physics sections (Box2D.NET authoritative + box2d3-wasm presentation) the interpolation math below remains the pattern the Babylon game renderers will use (LERP over the float32 shared buffers). When code and prose disagree, verified files win.
+> Reviewed blueprint for the authoritative-sim ← boundary → presentation interpolation math (C# ECS sim ← shared-memory bridge → TypeScript Babylon.js). The original dual-physics sections (Box2D.NET authoritative + box2d3-wasm presentation) the interpolation math below remains the pattern the Babylon game renderers will use (LERP over the float64 shared buffers). When code and prose disagree, verified files win.
 
 ## 1. Mathematical Foundation
 
@@ -107,4 +107,4 @@ Determinism corollary: the authoritative world uses deterministic single-threade
 
 ## 5. `HEAPF32`/`HEAPF64` shared memory
 
-Pinned shared-memory transfer is implemented: `GCHandle.Alloc(..., Pinned)` → `IntPtr` → `new Float32Array/Float64Array(wasmHeap, ptr, elementCount)` via `[JSImport]("notifyRender")` on the browser host. The scalar size comes from the signal's `[TypeScriptExport]` precision (4 = `sprite-move`, 8 = `transform3d`). The desktop host (`Game.WinApp`) ships the same pinned span through a WebView2 shared buffer instead of a heap view. The buffer math is unchanged from the interpolation pattern: `ingest` reads prev/curr straight from stride-indexed scalars over a zero-copy view. Design the `InterpState` buffer so the snapshot *source* is swappable — never let JSON parsing leak into the interpolation loop itself.
+Pinned shared-memory transfer is implemented: `GCHandle.Alloc(..., Pinned)` → `IntPtr` → `new Float64Array(wasmHeap, ptr, elementCount)` via `[JSImport]("notifyRender")` on the browser host. Every signal buffer is pure 64-bit (`sprite-move` and `transform3d` both carry 8-byte doubles); there is no scalar-size parameter. The desktop host (`Game.WinApp`) ships the same pinned span through a WebView2 shared buffer instead of a heap view. The buffer math is unchanged from the interpolation pattern: `ingest` reads prev/curr straight from stride-indexed scalars over a zero-copy view. Design the `InterpState` buffer so the snapshot *source* is swappable — never let JSON parsing leak into the interpolation loop itself.

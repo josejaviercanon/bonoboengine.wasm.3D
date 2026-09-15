@@ -4,20 +4,21 @@ namespace Game.Engine.ECS;
 ///     Host-agnostic simulation control: owns the lazily-created ECS simulations, wires
 ///     each one to a pinned zero-copy render transport, and exposes connect/pause verbs to
 ///     the presentation host. The same class backs the browser-wasm host
-///     (<c>Game.Wasm</c>, notification → <c>localHeapViewF32/F64</c>) and the WinApp host
-///     (<c>Game.WinApp</c>, notification → WebView2 shared buffer).
+///     (<c>Game.Wasm</c>, notification → <c>localHeapViewF64</c>) and the WinApp host
+///     (<c>Game.WinApp</c>, notification → WebView2 shared buffer). All buffers are pure
+///     64-bit doubles: there is no per-signal scalar size.
 /// </summary>
 public sealed class SimulationHost : IDisposable
 {
     /// <summary>
-    ///     Delivers a committed buffer to the presentation host: event name, pinned address,
-    ///     element count and scalar element size in bytes (4 = float, 8 = double). The pointer
-    ///     is host-width (<c>nint</c>; 32-bit on browser-wasm, 64-bit on native) and is only
+    ///     Delivers a committed buffer to the presentation host: event name, pinned address and
+    ///     element count. Scalar elements are always 8-byte doubles. The pointer is
+    ///     host-width (<c>nint</c>; 32-bit on browser-wasm, 64-bit on native) and is only
     ///     valid until the buffer grows — consumers must not cache it.
     /// </summary>
-    public delegate void BufferNotify(string eventName, nint bufferPtr, int elementCount, int scalarSize);
+    public delegate void BufferNotify(string eventName, nint bufferPtr, int elementCount);
 
-    /// <summary>Initial element capacity of the "sprite-move" (float32) buffer.</summary>
+    /// <summary>Initial element capacity of the "sprite-move" (float64) buffer.</summary>
     public const int EcsBufferCapacity = 128;
 
     /// <summary>Initial element capacity of the "transform3d" (float64) buffer.</summary>
@@ -40,7 +41,7 @@ public sealed class SimulationHost : IDisposable
         where T : unmanaged
     {
         var buffer = new PinnedRenderBuffer<T>(capacity);
-        buffer.OnNotify = name => _notify(name, buffer.Ptr, buffer.ElementCount, buffer.ElementSize);
+        buffer.OnNotify = name => _notify(name, buffer.Ptr, buffer.ElementCount);
         lock (_sync)
         {
             _buffers[eventName] = buffer;
@@ -59,11 +60,11 @@ public sealed class SimulationHost : IDisposable
     }
 
     public EcsSimulation Ecs => _ecs ??= new EcsSimulation(
-        new DirectRenderTransport<EcsRenderSignal, float>(
+        new DirectRenderTransport<EcsRenderSignal, double>(
             "sprite-move",
             SignalBufferEncoders.ElementLength,
             SignalBufferEncoders.Encode,
-            CreateBuffer<float>("sprite-move", EcsBufferCapacity)));
+            CreateBuffer<double>("sprite-move", EcsBufferCapacity)));
 
     public Transform3DEcsSimulation Transform3D => _transform3d ??= new Transform3DEcsSimulation(
         new DirectRenderTransport<Transform3DRenderSignal, double>(

@@ -3,8 +3,8 @@
 // Single source of truth: the C# [TypeScriptExport] structs and Game.Engine.ECS.SignalBufferLayout.
 // Regenerated on every `dotnet build` of Game.Engine.
 
-/** Scalar element type of the shared-memory signal buffer. */
-export type ScalarArray = Float32Array | Float64Array;
+/** Scalar element type of the shared-memory signal buffer (pure 64-bit). */
+export type ScalarArray = Float64Array;
 
 /** Scalar element sizes in bytes; keep in sync with ScalarPrecision. */
 export const ScalarSizes = { Float32: 4, Float64: 8 } as const;
@@ -30,8 +30,8 @@ export interface SpriteState {
     b: number;
 }
 export const SpriteStateStride = 6;
-export const SpriteStateScalarSize = 4;
-export const SpriteStateByteLength = 24;
+export const SpriteStateScalarSize = 8;
+export const SpriteStateByteLength = 48;
 
 export interface Transform3DState {
     id: number;

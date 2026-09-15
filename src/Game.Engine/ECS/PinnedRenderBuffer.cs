@@ -5,8 +5,8 @@ namespace Game.Engine.ECS;
 
 /// <summary>
 ///     Zero-copy render buffer: a pinned managed array (<typeparamref name="T"/> =
-///     <c>float</c> or <c>double</c>) whose address is handed to the presentation layer.
-///     The WASM host projects a <c>Float32Array</c>/<c>Float64Array</c> over the heap at
+///     <c>double</c> for every production signal) whose address is handed to the
+///     presentation layer. The WASM host projects a <c>Float64Array</c> over the heap at
 ///     <see cref="Ptr"/>; the WinApp host memcpy's the same span into a WebView2 shared
 ///     buffer. Growing the buffer re-pins (the pointer changes), so consumers must always
 ///     read the pointer passed with the notification — never cache it.
@@ -33,7 +33,7 @@ public sealed class PinnedRenderBuffer<T> : IDisposable
     /// <summary>Number of elements written by the last <see cref="GetSpan"/> call.</summary>
     public int ElementCount { get; private set; }
 
-    /// <summary>Size in bytes of one element (4 for float, 8 for double).</summary>
+    /// <summary>Size in bytes of one element (8 for double).</summary>
     public int ElementSize => Unsafe.SizeOf<T>();
 
     public Span<T> GetSpan(int elementCount)

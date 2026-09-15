@@ -4,10 +4,9 @@ using Xunit;
 namespace Game.Tests;
 
 /// <summary>
-///     Unit tests for the 3D transform signal layout: <c>Transform3DState</c> +
-///     <c>SignalBufferEncoders</c> for <c>Transform3DRenderSignal</c>. The transform3d
-///     buffer is float64 (<c>double</c> / <c>Float64Array</c>) — mirrored by the
-///     generated constants consumed in TypeScript.
+///     Unit tests for the signal layout: <c>Transform3DState</c> + <c>SpriteState</c> and
+///     <c>SignalBufferEncoders</c>. Every signal buffer is float64 (<c>double</c> /
+///     <c>Float64Array</c>) — mirrored by the generated constants consumed in TypeScript.
 /// </summary>
 public class Transform3DLayoutTests
 {
@@ -24,11 +23,48 @@ public class Transform3DLayoutTests
     }
 
     [Fact]
-    public void Ecs_Sprite_Stays_Float32()
+    public void Ecs_Sprite_Stays_Float64()
     {
         Assert.Equal(6, SignalBufferLayout.EcsStride);
-        Assert.Equal(sizeof(float), SignalBufferLayout.EcsScalarSize);
+        Assert.Equal(sizeof(double), SignalBufferLayout.EcsScalarSize);
         Assert.Equal(SignalBufferLayout.EcsScalarSize, GeneratedSignalLayout.SpriteStateScalarSize);
+        Assert.Equal(
+            SignalBufferLayout.EcsStride * sizeof(double),
+            GeneratedSignalLayout.SpriteStateByteLength);
+    }
+
+    [Fact]
+    public void Encode_Sprite_Writes_Double_Records_At_Expected_Offsets()
+    {
+        var sprites = new[]
+        {
+            new SpriteState(3, 1.5f, -2.25f, 10, 20, 30),
+            new SpriteState(9, 0f, 4.75f, 255, 0, 128),
+        };
+        var signal = new EcsRenderSignal(7, sprites.Length, 16.67, sprites);
+
+        var values = new double[SignalBufferEncoders.ElementLength(signal)];
+        SignalBufferEncoders.Encode(signal, values);
+
+        Assert.Equal(7d, values[SignalBuffer.HeaderSeq]);
+        Assert.Equal(0d, values[SignalBuffer.HeaderEpoch]);
+        Assert.Equal(2d, values[SignalBuffer.HeaderEntityCount]);
+        Assert.Equal(6d, values[SignalBuffer.HeaderStride]);
+
+        var stride = SignalBufferLayout.EcsStride;
+        var b0 = SignalBuffer.HeaderLength;
+        Assert.Equal(3d, values[b0]);
+        Assert.Equal(1.5d, values[b0 + 1]);
+        Assert.Equal(-2.25d, values[b0 + 2]);
+        Assert.Equal(10d, values[b0 + 3]);
+        Assert.Equal(20d, values[b0 + 4]);
+        Assert.Equal(30d, values[b0 + 5]);
+
+        var b1 = b0 + stride;
+        Assert.Equal(9d, values[b1]);
+        Assert.Equal(4.75d, values[b1 + 2]);
+        Assert.Equal(255d, values[b1 + 3]);
+        Assert.Equal(128d, values[b1 + 5]);
     }
 
     [Fact]
