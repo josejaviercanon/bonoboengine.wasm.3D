@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Game.WinApp (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Game.WinApp (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
